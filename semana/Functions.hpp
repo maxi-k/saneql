@@ -19,6 +19,7 @@ class Functions {
       Desc,
       Collate,
       Is,
+      In,
       Like,
       Filter,
       Join,

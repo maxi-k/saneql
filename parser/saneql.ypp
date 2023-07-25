@@ -53,6 +53,7 @@ static int yylex(saneql::saneqlparser::parser::semantic_type* yylval,saneql::san
 
 // Keywords
 %token LET "let"
+%token IN "in"
 %token DEFUN "defun"
 %token NULL_P "null"
 %token TRUE_P "true"
@@ -95,16 +96,21 @@ DefineFunction:
 ;
 
 QueryBody:
-   LetList Expression { ast QueryBody lets=1 body=2 }
+   LetBindings Expression { ast QueryBody lets=1 body=2 }
 ;
 
-LetList:
-   LetList LetEntry { list List head=1 tail=2 }
+LetBindings:
+   LET LetList IN { return 2 }
  | %empty { null }
 ;
 
+LetList:
+   LetList ',' LetEntry { list List head=1 tail=3 }
+ | LetEntry { list List head=1 }
+;
+
 LetEntry:
-   LET Identifier LetArgs COLON_EQUALS Expression ',' { ast LetEntry name=2 args=3 body=5 }
+    Identifier LetArgs COLON_EQUALS Expression { ast LetEntry name=1 args=2 body=4 }
 ;
 
 LetArgs:

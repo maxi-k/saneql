@@ -852,6 +852,15 @@ SemanticAnalysis::ExpressionResult SemanticAnalysis::analyzeCall(const BindingIn
          auto order = unifyCollate(base->getOrdering(), arg.getOrdering());
          return ExpressionResult(make_unique<algebra::ComparisonExpression>(move(base->scalar()), move(arg.scalar()), algebra::ComparisonExpression::Is, order.getCollate()), OrderingInfo::defaultOrder());
       }
+      case Builtin::In: {
+         auto args = expressionListArgument(scope, args[0]);
+         for (auto& arg : args) {
+            if (!e.value.isScalar()) reportError("'in' requires scalar arguments");
+            enforceComparable(*base, e.value);
+         }
+         // TODO saparate comparison expression / allow for multiple values?
+         return ExpressionResult(make_unique<algebra::ComparisonExpression>(move(base->scalar()), move()))
+      }
       case Builtin::Like: reportError("like not implemented yet");
       case Builtin::Filter: {
          auto cond = scalarArgument(base->getBinding(), name, sig->arguments[0].name, args[0]);

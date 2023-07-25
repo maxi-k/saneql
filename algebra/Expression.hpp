@@ -97,6 +97,8 @@ class ComparisonExpression : public Expression {
       NotEqual,
       Is,
       IsNot,
+      IsIn,
+      IsNotIn,
       Less,
       LessOrEqual,
       Greater,

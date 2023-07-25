@@ -71,6 +71,8 @@ void ComparisonExpression::generate(SQLWriter& out)
       case Mode::NotEqual: out.write(" <> "); break;
       case Mode::Is: out.write(" is not distinct from "); break;
       case Mode::IsNot: out.write(" is distinct from "); break;
+      case Mode::In: out.write(" in "); break;
+      case Mode::NotIn: out.write(" not in "); break;
       case Mode::Less: out.write(" < "); break;
       case Mode::LessOrEqual: out.write(" <= "); break;
       case Mode::Greater: out.write(" > "); break;
