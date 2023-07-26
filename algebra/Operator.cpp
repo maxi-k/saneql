@@ -18,7 +18,7 @@ TableScan::TableScan(string name, vector<Column> columns)
 {
 }
 //---------------------------------------------------------------------------
-void TableScan::generate(SQLWriter& out)
+void TableScan::generate(SQLWriter& out) const
 // Generate SQL
 {
    out.write("(select ");
@@ -43,13 +43,13 @@ Select::Select(unique_ptr<Operator> input, unique_ptr<Expression> condition)
 {
 }
 //---------------------------------------------------------------------------
-void Select::generate(SQLWriter& out)
+void Select::generate(SQLWriter& out) const
 // Generate SQL
 {
    out.write("(select * from ");
-   input->generate(out);
+   out.write(*input);
    out.write(" s where ");
-   condition->generate(out);
+   out.write(*condition);
    out.write(")");
 }
 //---------------------------------------------------------------------------
@@ -59,18 +59,18 @@ Map::Map(unique_ptr<Operator> input, vector<Entry> computations)
 {
 }
 //---------------------------------------------------------------------------
-void Map::generate(SQLWriter& out)
+void Map::generate(SQLWriter& out) const
 // Generate SQL
 {
    out.write("(select *");
    for (auto& c : computations) {
       out.write(", ");
-      c.value->generate(out);
+      out.write(*c.value);
       out.write(" as ");
       out.writeIU(c.iu.get());
    }
    out.write(" from ");
-   input->generate(out);
+   out.write(*input);
    out.write(" s)");
 }
 //---------------------------------------------------------------------------
@@ -80,80 +80,80 @@ Join::Join(unique_ptr<Operator> left, unique_ptr<Operator> right, unique_ptr<Exp
 {
 }
 //---------------------------------------------------------------------------
-void Join::generate(SQLWriter& out)
+void Join::generate(SQLWriter& out) const
 // Generate SQL
 {
    switch (joinType) {
       case JoinType::Inner:
          out.write("(select * from ");
-         left->generate(out);
+         out.write(*left);
          out.write(" l inner join ");
-         right->generate(out);
+         out.write(*right);
          out.write(" r on ");
-         condition->generate(out);
+         out.write(*condition);
          out.write(")");
          break;
       case JoinType::LeftOuter:
          out.write("(select * from ");
-         left->generate(out);
+         out.write(*left);
          out.write(" l left outer join ");
-         right->generate(out);
+         out.write(*right);
          out.write(" r on ");
-         condition->generate(out);
+         out.write(*condition);
          out.write(")");
          break;
       case JoinType::RightOuter:
          out.write("(select * from ");
-         left->generate(out);
+         out.write(*left);
          out.write(" l right outer join ");
-         right->generate(out);
+         out.write(*right);
          out.write(" r on ");
-         condition->generate(out);
+         out.write(*condition);
          out.write(")");
          break;
       case JoinType::FullOuter:
          out.write("(select * from ");
-         left->generate(out);
+         out.write(*left);
          out.write(" l full outer join ");
-         right->generate(out);
+         out.write(*right);
          out.write(" r on ");
-         condition->generate(out);
+         out.write(*condition);
          out.write(")");
          break;
       case JoinType::LeftSemi:
          out.write("(select * from ");
-         left->generate(out);
+         out.write(*left);
          out.write(" l where exists(select * from ");
-         right->generate(out);
+         out.write(*right);
          out.write(" r where ");
-         condition->generate(out);
+         out.write(*condition);
          out.write("))");
          break;
       case JoinType::RightSemi:
          out.write("(select * from ");
-         right->generate(out);
+         out.write(*right);
          out.write(" r where exists(select * from ");
-         left->generate(out);
+         out.write(*left);
          out.write(" l where ");
-         condition->generate(out);
+         out.write(*condition);
          out.write("))");
          break;
       case JoinType::LeftAnti:
          out.write("(select * from ");
-         left->generate(out);
+         out.write(*left);
          out.write(" l where not exists(select * from ");
-         right->generate(out);
+         out.write(*right);
          out.write(" r where ");
-         condition->generate(out);
+         out.write(*condition);
          out.write("))");
          break;
       case JoinType::RightAnti:
          out.write("(select * from ");
-         right->generate(out);
+         out.write(*right);
          out.write(" r where not exists(select * from ");
-         left->generate(out);
+         out.write(*left);
          out.write(" l where ");
-         condition->generate(out);
+         out.write(*condition);
          out.write("))");
          break;
    }
@@ -165,7 +165,7 @@ GroupBy::GroupBy(unique_ptr<Operator> input, vector<Entry> groupBy, vector<Aggre
 {
 }
 //---------------------------------------------------------------------------
-void GroupBy::generate(SQLWriter& out)
+void GroupBy::generate(SQLWriter& out) const
 // Generate SQL
 {
    out.write("(select ");
@@ -175,7 +175,7 @@ void GroupBy::generate(SQLWriter& out)
          first = false;
       else
          out.write(", ");
-      g.value->generate(out);
+      out.write(*g.value);
       out.write(" as ");
       out.writeIU(g.iu.get());
    }
@@ -194,14 +194,14 @@ void GroupBy::generate(SQLWriter& out)
       }
       if (a.op != Op::CountStar) {
          out.write("(");
-         a.value->generate(out);
+         out.write(*a.value);
          out.write(")");
       }
       out.write(" as ");
       out.writeIU(a.iu.get());
    }
    out.write(" from ");
-   input->generate(out);
+   out.write(*input);
    out.write(" s group by ");
    if (groupBy.empty()) {
       out.write("true");
@@ -220,11 +220,11 @@ Sort::Sort(unique_ptr<Operator> input, vector<Entry> order, optional<uint64_t> l
 {
 }
 //---------------------------------------------------------------------------
-void Sort::generate(SQLWriter& out)
+void Sort::generate(SQLWriter& out) const
 // Generate SQL
 {
    out.write("(select * from ");
-   input->generate(out);
+   out.write(*input);
    out.write(" s");
    if (!order.empty()) {
       out.write(" order by ");
@@ -234,7 +234,7 @@ void Sort::generate(SQLWriter& out)
             first = false;
          else
             out.write(", ");
-         o.value->generate(out);
+         out.write(*o.value);
          if (o.collate != Collate{}) out.write(" collate TODO"); // TODO
          if (o.descending) out.write(" desc");
       }
@@ -256,7 +256,7 @@ InlineTable::InlineTable(vector<unique_ptr<algebra::IU>> columns, vector<unique_
 {
 }
 //---------------------------------------------------------------------------
-void InlineTable::generate(SQLWriter& out)
+void InlineTable::generate(SQLWriter& out) const
 // Generate SQL
 {
    out.write("(select * from (values");
@@ -267,7 +267,7 @@ void InlineTable::generate(SQLWriter& out)
             out.write("(");
             for (unsigned index2 = 0, limit2 = columns.size(); index2 != limit2; ++index2) {
                if (index2) out.write(", ");
-               values[index * limit2 + index2]->generate(out);
+               out.write(*values[index * limit2 + index2]);
             }
             out.write(")");
          } else {

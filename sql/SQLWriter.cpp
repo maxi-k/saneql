@@ -1,4 +1,5 @@
 #include "sql/SQLWriter.hpp"
+#include "sql/SQLGenerator.hpp"
 #include "infra/Schema.hpp"
 //---------------------------------------------------------------------------
 // (c) 2023 Thomas Neumann
@@ -83,6 +84,14 @@ void SQLWriter::writeType(Type type)
       case Type::Date: writer += "date"; break;
       case Type::Interval: writer += "interval"; break;
    }
+}
+//---------------------------------------------------------------------------
+void SQLWriter::write(const SQLGenerator& gen) {
+   gen.generate(*this);
+}
+//---------------------------------------------------------------------------
+void SQLiteWriter::write(const SQLGenerator& gen) {
+   gen.generate(*this);
 }
 //---------------------------------------------------------------------------
 }

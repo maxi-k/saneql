@@ -30,13 +30,10 @@ class IU {
 };
 //---------------------------------------------------------------------------
 /// Base class for operators
-class Operator {
+class Operator : public SQLGenerator {
    public:
    /// Destructor
    virtual ~Operator();
-
-   // Generate SQL
-   virtual void generate(SQLWriter& out) = 0;
 };
 //---------------------------------------------------------------------------
 /// A table scan operator
@@ -61,7 +58,7 @@ class TableScan : public Operator {
    TableScan(std::string name, std::vector<Column> columns);
 
    // Generate SQL
-   void generate(SQLWriter& out) override;
+   void generate(SQLWriter& out) const override;
 };
 //---------------------------------------------------------------------------
 /// A select operator
@@ -76,7 +73,7 @@ class Select : public Operator {
    Select(std::unique_ptr<Operator> input, std::unique_ptr<Expression> condition);
 
    // Generate SQL
-   void generate(SQLWriter& out) override;
+   void generate(SQLWriter& out) const override;
 };
 //---------------------------------------------------------------------------
 /// A map operator
@@ -101,7 +98,7 @@ class Map : public Operator {
    Map(std::unique_ptr<Operator> input, std::vector<Entry> computations);
 
    // Generate SQL
-   void generate(SQLWriter& out) override;
+   void generate(SQLWriter& out) const override;
 };
 //---------------------------------------------------------------------------
 /// A join operator
@@ -132,7 +129,7 @@ class Join : public Operator {
    Join(std::unique_ptr<Operator> left, std::unique_ptr<Operator> right, std::unique_ptr<Expression> condition, JoinType joinType);
 
    // Generate SQL
-   void generate(SQLWriter& out) override;
+   void generate(SQLWriter& out) const override;
 };
 //---------------------------------------------------------------------------
 /// A group by operator
@@ -171,7 +168,7 @@ class GroupBy : public Operator {
    GroupBy(std::unique_ptr<Operator> input, std::vector<Entry> groupBy, std::vector<Aggregation> aggregates);
 
    // Generate SQL
-   void generate(SQLWriter& out) override;
+   void generate(SQLWriter& out) const override;
 };
 //---------------------------------------------------------------------------
 /// A sort operator
@@ -198,7 +195,7 @@ class Sort : public Operator {
    Sort(std::unique_ptr<Operator> input, std::vector<Entry> order, std::optional<uint64_t> limit, std::optional<uint64_t> offset);
 
    // Generate SQL
-   void generate(SQLWriter& out) override;
+   void generate(SQLWriter& out) const override;
 };
 //---------------------------------------------------------------------------
 /// An inline table definition
@@ -216,7 +213,7 @@ class InlineTable : public Operator {
    InlineTable(std::vector<std::unique_ptr<algebra::IU>> columns, std::vector<std::unique_ptr<algebra::Expression>> values, unsigned rowCount);
 
    // Generate SQL
-   void generate(SQLWriter& out) override;
+   void generate(SQLWriter& out) const override;
 };
 //---------------------------------------------------------------------------
 }

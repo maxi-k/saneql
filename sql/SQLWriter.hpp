@@ -12,6 +12,7 @@
 namespace saneql {
 //---------------------------------------------------------------------------
 class Type;
+class SQLGenerator;
 //---------------------------------------------------------------------------
 namespace algebra {
 class IU;
@@ -31,21 +32,32 @@ class SQLWriter {
    /// Constructor
    SQLWriter();
    /// Destructor
-   ~SQLWriter();
+   virtual ~SQLWriter();
 
    /// Write a SQL fragment
-   void write(std::string_view sql);
+   virtual void write(std::string_view sql);
    /// Write an identifier, quoting as needed
-   void writeIdentifier(std::string_view identifier);
+   virtual void writeIdentifier(std::string_view identifier);
    /// Write an IU
-   void writeIU(const algebra::IU* iu);
+   virtual void writeIU(const algebra::IU* iu);
    /// Write a string literal
-   void writeString(std::string_view str);
+   virtual void writeString(std::string_view str);
    /// Write a type
-   void writeType(Type type);
+   virtual void writeType(Type type);
 
    /// Get the result
    std::string getResult() const { return result; }
+
+   /// Generate SQL
+   virtual void write(const SQLGenerator& gen);
+};
+//---------------------------------------------------------------------------
+// We can support different SQL dialects
+class SQLiteWriter : public SQLWriter {
+   public:
+   using SQLWriter::write;
+   /// Generate SQL
+   virtual void write(const SQLGenerator& gen) override;
 };
 //---------------------------------------------------------------------------
 }

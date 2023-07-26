@@ -2,7 +2,9 @@
 #define H_saneql_Expression
 //---------------------------------------------------------------------------
 #include "infra/Schema.hpp"
+#include "sql/SQLGenerator.hpp"
 #include <memory>
+#include <string>
 //---------------------------------------------------------------------------
 // SaneQL
 // (c) 2023 Thomas Neumann
@@ -12,13 +14,14 @@ namespace saneql {
 //---------------------------------------------------------------------------
 enum class Collate : uint8_t;
 class SQLWriter;
+class SQLiteWriter;
 //---------------------------------------------------------------------------
 namespace algebra {
 //---------------------------------------------------------------------------
 class IU;
 //---------------------------------------------------------------------------
 /// Base class for expressions
-class Expression {
+class Expression : public SQLGenerator {
    private:
    /// The type
    Type type;
@@ -31,9 +34,6 @@ class Expression {
 
    /// Get the result type
    Type getType() const { return type; }
-
-   /// Generate SQL
-   virtual void generate(SQLWriter& out) = 0;
    /// Generate SQL in a form that is suitable as operand
    virtual void generateOperand(SQLWriter& out);
 };
@@ -50,10 +50,12 @@ class IURef : public Expression {
    /// Get the IU
    const IU* getIU() const { return iu; }
 
-   /// Generate SQL
-   void generate(SQLWriter& out) override;
    /// Generate SQL in a form that is suitable as operand
    void generateOperand(SQLWriter& out) override { generate(out); }
+
+   protected:
+   /// Generate SQL
+   void generate(SQLWriter& out) const override;
 };
 //---------------------------------------------------------------------------
 /// A constant value
@@ -69,10 +71,14 @@ class ConstExpression : public Expression {
    /// Constructor for NULL values
    ConstExpression(std::nullptr_t, Type type) : Expression(type), null(true) {}
 
-   /// Generate SQL
-   void generate(SQLWriter& out) override;
    /// Generate SQL in a form that is suitable as operand
    void generateOperand(SQLWriter& out) override { generate(out); }
+
+   const std::string& stringValue() { return value; }
+
+   protected:
+   /// Generate SQL
+   void generate(SQLWriter& out) const override;
 };
 //---------------------------------------------------------------------------
 /// A cast expression
@@ -84,8 +90,10 @@ class CastExpression : public Expression {
    /// Constructor
    CastExpression(std::unique_ptr<Expression> input, Type type) : Expression(type), input(move(input)) {}
 
+   protected:
    /// Generate SQL
-   void generate(SQLWriter& out) override;
+   void generate(SQLWriter& out) const override;
+   void generate(SQLiteWriter& out) const override;
 };
 //---------------------------------------------------------------------------
 /// A comparison expression
@@ -113,8 +121,9 @@ class ComparisonExpression : public Expression {
    /// Constructor
    ComparisonExpression(std::unique_ptr<Expression> left, std::unique_ptr<Expression> right, Mode mode, Collate collate);
 
+   protected:
    /// Generate SQL
-   void generate(SQLWriter& out) override;
+   void generate(SQLWriter& out) const override;
 };
 //---------------------------------------------------------------------------
 /// A binary expression
@@ -142,7 +151,7 @@ class BinaryExpression : public Expression {
    BinaryExpression(std::unique_ptr<Expression> left, std::unique_ptr<Expression> right, Type resultType, Operation op);
 
    /// Generate SQL
-   void generate(SQLWriter& out) override;
+   void generate(SQLWriter& out) const override;
 };
 //---------------------------------------------------------------------------
 /// Au unary expression
@@ -164,7 +173,7 @@ class UnaryExpression : public Expression {
    UnaryExpression(std::unique_ptr<Expression> input, Type resultType, Operation op);
 
    /// Generate SQL
-   void generate(SQLWriter& out) override;
+   void generate(SQLWriter& out) const override;
 };
 //---------------------------------------------------------------------------
 }
