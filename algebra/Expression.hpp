@@ -16,6 +16,7 @@ class SQLWriter;
 namespace algebra {
 //---------------------------------------------------------------------------
 class IU;
+class Operator;
 //---------------------------------------------------------------------------
 /// Base class for expressions
 class Expression {
@@ -102,7 +103,8 @@ class ComparisonExpression : public Expression {
       Less,
       LessOrEqual,
       Greater,
-      GreaterOrEqual
+      GreaterOrEqual,
+      Like
    };
    /// The input
    std::unique_ptr<Expression> left, right;
@@ -114,6 +116,40 @@ class ComparisonExpression : public Expression {
    public:
    /// Constructor
    ComparisonExpression(std::unique_ptr<Expression> left, std::unique_ptr<Expression> right, Mode mode, Collate collate);
+
+   /// Generate SQL
+   void generate(SQLWriter& out) override;
+};
+//---------------------------------------------------------------------------
+/// A between expression
+class BetweenExpression : public Expression {
+   public:
+   /// The input
+   std::unique_ptr<Expression> base, lower, upper;
+   /// The collation
+   Collate collate;
+
+   public:
+   /// Constructor
+   BetweenExpression(std::unique_ptr<Expression> base, std::unique_ptr<Expression> lower, std::unique_ptr<Expression> upper, Collate collate);
+
+   /// Generate SQL
+   void generate(SQLWriter& out) override;
+};
+//---------------------------------------------------------------------------
+/// An in expression
+class InExpression : public Expression {
+   public:
+   /// The input
+   std::unique_ptr<Expression> probe;
+   /// The values to check against
+   std::vector<std::unique_ptr<Expression>> values;
+   /// The collation
+   Collate collate;
+
+   public:
+   /// Constructor
+   InExpression(std::unique_ptr<Expression> probe, std::vector<std::unique_ptr<Expression>> values, Collate collate);
 
    /// Generate SQL
    void generate(SQLWriter& out) override;
@@ -147,7 +183,7 @@ class BinaryExpression : public Expression {
    void generate(SQLWriter& out) override;
 };
 //---------------------------------------------------------------------------
-/// Au unary expression
+/// An unary expression
 class UnaryExpression : public Expression {
    public:
    /// Possible operations
@@ -166,6 +202,145 @@ class UnaryExpression : public Expression {
    UnaryExpression(std::unique_ptr<Expression> input, Type resultType, Operation op);
 
    /// Generate SQL
+   void generate(SQLWriter& out) override;
+};
+//---------------------------------------------------------------------------
+/// An extract expression
+class ExtractExpression : public Expression {
+   public:
+   /// Possible parts
+   enum Part {
+      Year,
+      Month,
+      Day
+   };
+   /// The input
+   std::unique_ptr<Expression> input;
+   /// The part
+   Part part;
+
+   public:
+   /// Constructor
+   ExtractExpression(std::unique_ptr<Expression> input, Part part);
+
+   /// Generate SQL
+   void generate(SQLWriter& out) override;
+};
+//---------------------------------------------------------------------------
+/// A substring expression
+class SubstrExpression : public Expression {
+   public:
+   /// The input
+   std::unique_ptr<Expression> value, from, len;
+
+   public:
+   /// Constructor
+   SubstrExpression(std::unique_ptr<Expression> value, std::unique_ptr<Expression> from, std::unique_ptr<Expression> len);
+
+   /// Generate SQL
+   void generate(SQLWriter& out) override;
+};
+//---------------------------------------------------------------------------
+/// A simple case expression
+class SimpleCaseExpression : public Expression {
+   public:
+   using Cases = std::vector<std::pair<std::unique_ptr<algebra::Expression>, std::unique_ptr<algebra::Expression>>>;
+
+   /// The value to search
+   std::unique_ptr<Expression> value;
+   /// The cases
+   Cases cases;
+   /// The default result
+   std::unique_ptr<Expression> defaultValue;
+
+   public:
+   /// Constructor
+   SimpleCaseExpression(std::unique_ptr<Expression> value, Cases cases, std::unique_ptr<Expression> defaultValue);
+
+   /// Generate SQL
+   void generate(SQLWriter& out) override;
+};
+//---------------------------------------------------------------------------
+/// A dearched case expression
+class SearchedCaseExpression : public Expression {
+   public:
+   using Cases = SimpleCaseExpression::Cases;
+
+   /// The cases
+   Cases cases;
+   /// The default result
+   std::unique_ptr<Expression> defaultValue;
+
+   public:
+   /// Constructor
+   SearchedCaseExpression(Cases cases, std::unique_ptr<Expression> defaultValue);
+
+   /// Generate SQL
+   void generate(SQLWriter& out) override;
+};
+//---------------------------------------------------------------------------
+/// Helper for aggregation steps
+struct AggregationLike {
+   /// A regular computation
+   struct Entry {
+      /// The expression
+      std::unique_ptr<algebra::Expression> value;
+      /// The result IU
+      std::unique_ptr<algebra::IU> iu;
+   };
+   /// Known aggregation functions
+   enum class Op {
+      CountStar,
+      Count,
+      CountDistinct,
+      Sum,
+      SumDistinct,
+      Min,
+      Max,
+      Avg,
+      AvgDistinct
+   };
+   /// Known window functions
+   enum class WindowOp {
+      CountStar,
+      Count,
+      CountDistinct,
+      Sum,
+      SumDistinct,
+      Min,
+      Max,
+      Avg,
+      AvgDistinct,
+      RowNumber
+   };
+   static_assert(static_cast<unsigned>(Op::AvgDistinct) == static_cast<unsigned>(WindowOp::AvgDistinct));
+
+   /// An aggregation
+   struct Aggregation {
+      /// The expression
+      std::unique_ptr<algebra::Expression> value;
+      /// The result IU
+      std::unique_ptr<algebra::IU> iu;
+      /// The operation
+      Op op;
+   };
+};
+//---------------------------------------------------------------------------
+/// An aggregate expression
+class Aggregate : public Expression, public AggregationLike {
+   private:
+   /// The input
+   std::unique_ptr<Operator> input;
+   /// The aggregates
+   std::vector<Aggregation> aggregates;
+   /// The final result computation
+   std::unique_ptr<Expression> computation;
+
+   public:
+   /// Constructor
+   Aggregate(std::unique_ptr<Operator> input, std::vector<Aggregation> aggregates, std::unique_ptr<Expression> computation);
+
+   // Generate SQL
    void generate(SQLWriter& out) override;
 };
 //---------------------------------------------------------------------------
