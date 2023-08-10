@@ -74,6 +74,62 @@ void Map::generate(SQLWriter& out) const
    out.write(" s)");
 }
 //---------------------------------------------------------------------------
+SetOperation::SetOperation(unique_ptr<Operator> left, unique_ptr<Operator> right, vector<unique_ptr<Expression>> leftColumns, vector<unique_ptr<Expression>> rightColumns, vector<unique_ptr<IU>> resultColumns, Op op)
+   : left(move(left)), right(move(right)), leftColumns(move(leftColumns)), rightColumns(move(rightColumns)), resultColumns(move(resultColumns)), op(op)
+// Constructor
+{
+}
+//---------------------------------------------------------------------------
+void SetOperation::generate(SQLWriter& out)
+// Generate SQL
+{
+   auto dumpColumns = [&out](const vector<unique_ptr<Expression>>& columns) {
+      if (columns.empty()) {
+         out.write("1");
+      } else {
+         bool first = true;
+         for (auto& c : columns) {
+            if (first)
+               first = false;
+            else
+               out.write(", ");
+            c->generate(out);
+         }
+      }
+   };
+   out.write("(select * from ((select ");
+   dumpColumns(leftColumns);
+   out.write(" from ");
+   left->generate(out);
+   out.write(" l) ");
+   switch (op) {
+      case Op::Union: out.write("union"); break;
+      case Op::UnionAll: out.write("union all"); break;
+      case Op::Except: out.write("except"); break;
+      case Op::ExceptAll: out.write("except all"); break;
+      case Op::Intersect: out.write("intersect"); break;
+      case Op::IntersectAll: out.write("intersect all"); break;
+   }
+   out.write(" (select ");
+   dumpColumns(rightColumns);
+   out.write(" from ");
+   right->generate(out);
+   out.write(" r)) s");
+   if (!resultColumns.empty()) {
+      out.write("(");
+      bool first = true;
+      for (auto& c : resultColumns) {
+         if (first)
+            first = false;
+         else
+            out.write(", ");
+         out.writeIU(c.get());
+      }
+      out.write(")");
+   }
+   out.write(")");
+}
+//---------------------------------------------------------------------------
 Join::Join(unique_ptr<Operator> left, unique_ptr<Operator> right, unique_ptr<Expression> condition, JoinType joinType)
    : left(move(left)), right(move(right)), condition(move(condition)), joinType(joinType)
 // Constructor
@@ -186,14 +242,16 @@ void GroupBy::generate(SQLWriter& out) const
          out.write(", ");
       switch (a.op) {
          case Op::CountStar: out.write("count(*)"); break;
-         case Op::Count: out.write("count"); break;
-         case Op::Sum: out.write("sum"); break;
-         case Op::Avg: out.write("avg"); break;
-         case Op::Min: out.write("min"); break;
-         case Op::Max: out.write("max"); break;
+         case Op::Count: out.write("count("); break;
+         case Op::CountDistinct: out.write("count(distinct "); break;
+         case Op::Sum: out.write("sum("); break;
+         case Op::SumDistinct: out.write("sum(distinct "); break;
+         case Op::Avg: out.write("avg("); break;
+         case Op::AvgDistinct: out.write("avg(distinct "); break;
+         case Op::Min: out.write("min("); break;
+         case Op::Max: out.write("max("); break;
       }
       if (a.op != Op::CountStar) {
-         out.write("(");
          out.write(*a.value);
          out.write(")");
       }
@@ -248,6 +306,71 @@ void Sort::generate(SQLWriter& out) const
       out.write(to_string(*offset));
    }
    out.write(")");
+}
+//---------------------------------------------------------------------------
+Window::Window(unique_ptr<Operator> input, vector<Aggregation> aggregates, vector<unique_ptr<Expression>> partitionBy, vector<Sort::Entry> orderBy)
+   : input(move(input)), aggregates(move(aggregates)), partitionBy(move(partitionBy)), orderBy(move(orderBy))
+// Constructor
+{
+}
+//---------------------------------------------------------------------------
+void Window::generate(SQLWriter& out)
+// Generate SQL
+{
+   auto aggr = [&out](const char* name, const Aggregation& a, bool distinct = false) {
+      out.write(name);
+      out.write("(");
+      if (distinct) out.write("distinct ");
+      a.value->generate(out);
+      out.write(")");
+   };
+   out.write("(select *");
+   for (auto& a : aggregates) {
+      out.write(", ");
+      switch (static_cast<WindowOp>(a.op)) {
+         case Op::CountStar: out.write("count(*)"); break;
+         case Op::Count: aggr("count", a); break;
+         case Op::CountDistinct: aggr("count", a, true); break;
+         case Op::Sum: aggr("sum", a); break;
+         case Op::SumDistinct: aggr("sum", a, true); break;
+         case Op::Avg: aggr("avg", a); break;
+         case Op::AvgDistinct: aggr("avg", a, true); break;
+         case Op::Min: aggr("min", a); break;
+         case Op::Max: aggr("max", a); break;
+         case Op::RowNumber: out.write("row_number()"); break;
+      }
+      out.write(" over (");
+      if (!partitionBy.empty()) {
+         out.write("partition by ");
+         bool first = true;
+         for (auto& p : partitionBy) {
+            if (first)
+               first = false;
+            else
+               out.write(", ");
+            p->generate(out);
+         }
+      }
+      if (!orderBy.empty()) {
+         if (!partitionBy.empty()) out.write(" ");
+         out.write("order by ");
+         bool first = true;
+         for (auto& o : orderBy) {
+            if (first)
+               first = false;
+            else
+               out.write(", ");
+            o.value->generate(out);
+            if (o.collate != Collate{}) out.write(" collate TODO"); // TODO
+            if (o.descending) out.write(" desc");
+         }
+      }
+      out.write(") as ");
+      out.writeIU(a.iu.get());
+   }
+   out.write(" from ");
+   input->generate(out);
+   out.write(" s)");
 }
 //---------------------------------------------------------------------------
 InlineTable::InlineTable(vector<unique_ptr<algebra::IU>> columns, vector<unique_ptr<algebra::Expression>> values, unsigned rowCount)

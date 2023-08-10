@@ -79,13 +79,7 @@ class Select : public Operator {
 /// A map operator
 class Map : public Operator {
    public:
-   /// A regular computation
-   struct Entry {
-      /// The expression
-      std::unique_ptr<algebra::Expression> value;
-      /// The result IU
-      std::unique_ptr<algebra::IU> iu;
-   };
+   using Entry = AggregationLike::Entry;
 
    private:
    /// The input
@@ -99,6 +93,37 @@ class Map : public Operator {
 
    // Generate SQL
    void generate(SQLWriter& out) const override;
+};
+//---------------------------------------------------------------------------
+/// A set operation operator
+class SetOperation : public Operator {
+   public:
+   /// Operation types
+   enum class Op {
+      Union,
+      UnionAll,
+      Except,
+      ExceptAll,
+      Intersect,
+      IntersectAll
+   };
+
+   private:
+   /// The input
+   std::unique_ptr<Operator> left, right;
+   /// The input columns
+   std::vector<std::unique_ptr<Expression>> leftColumns, rightColumns;
+   /// The result columns
+   std::vector<std::unique_ptr<IU>> resultColumns;
+   /// The operation
+   Op op;
+
+   public:
+   /// Constructor
+   SetOperation(std::unique_ptr<Operator> left, std::unique_ptr<Operator> right, std::vector<std::unique_ptr<Expression>> leftColumns, std::vector<std::unique_ptr<Expression>> rightColumns, std::vector<std::unique_ptr<IU>> resultColumns, Op op);
+
+   // Generate SQL
+   void generate(SQLWriter& out) override;
 };
 //---------------------------------------------------------------------------
 /// A join operator
@@ -133,28 +158,7 @@ class Join : public Operator {
 };
 //---------------------------------------------------------------------------
 /// A group by operator
-class GroupBy : public Operator {
-   public:
-   using Entry = Map::Entry;
-   /// Known aggregation functions
-   enum class Op {
-      CountStar,
-      Count,
-      Sum,
-      Min,
-      Max,
-      Avg
-   };
-   /// An aggregation
-   struct Aggregation {
-      /// The expression
-      std::unique_ptr<algebra::Expression> value;
-      /// The result IU
-      std::unique_ptr<algebra::IU> iu;
-      /// The operation
-      Op op;
-   };
-
+class GroupBy : public Operator, public AggregationLike {
    private:
    /// The input
    std::unique_ptr<Operator> input;
@@ -196,6 +200,29 @@ class Sort : public Operator {
 
    // Generate SQL
    void generate(SQLWriter& out) const override;
+};
+//---------------------------------------------------------------------------
+/// A window operator
+class Window : public Operator, public AggregationLike {
+   public:
+   using Op = WindowOp;
+
+   private:
+   /// The input
+   std::unique_ptr<Operator> input;
+   /// The aggregates
+   std::vector<Aggregation> aggregates;
+   /// The partition by expressions
+   std::vector<std::unique_ptr<Expression>> partitionBy;
+   /// The order by expression
+   std::vector<Sort::Entry> orderBy;
+
+   public:
+   /// Constructor
+   Window(std::unique_ptr<Operator> input, std::vector<Aggregation> aggregates, std::vector<std::unique_ptr<Expression>> partitionBy, std::vector<Sort::Entry> orderBy);
+
+   // Generate SQL
+   void generate(SQLWriter& out) override;
 };
 //---------------------------------------------------------------------------
 /// An inline table definition

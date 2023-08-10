@@ -1,6 +1,7 @@
 #include "algebra/Expression.hpp"
 #include "algebra/Operator.hpp"
 #include "sql/SQLWriter.hpp"
+#include <algorithm>
 //---------------------------------------------------------------------------
 // (c) 2023 Thomas Neumann
 //---------------------------------------------------------------------------
@@ -40,13 +41,14 @@ void ConstExpression::generate(SQLWriter& out) const
       out.write("NULL");
    } else {
       auto type = getType();
-      bool needsCast = (type.getType() != Type::Char) && (type.getType() != Type::Varchar) && (type.getType() != Type::Text);
-      if (needsCast) { out.write("cast("); }
-      out.writeString(value);
-      if (needsCast) {
+      if ((type.getType() != Type::Char) && (type.getType() != Type::Varchar) && (type.getType() != Type::Text)) {
+         out.write("cast(");
+         out.writeString(value);
          out.write(" as ");
          out.writeType(type);
          out.write(")");
+      } else {
+         out.writeString(value);
       }
    }
 }
@@ -97,8 +99,47 @@ void ComparisonExpression::generate(SQLWriter& out) const
       case Mode::LessOrEqual: out.write(" <= "); break;
       case Mode::Greater: out.write(" > "); break;
       case Mode::GreaterOrEqual: out.write(" >= "); break;
+      case Mode::Like: out.write(" like "); break;
    }
    right->generateOperand(out);
+}
+//---------------------------------------------------------------------------
+BetweenExpression::BetweenExpression(unique_ptr<Expression> base, unique_ptr<Expression> lower, unique_ptr<Expression> upper, Collate collate)
+   : Expression(Type::getBool().withNullable(base->getType().isNullable() || lower->getType().isNullable() || upper->getType().isNullable())), base(move(base)), lower(move(lower)), upper(move(upper)), collate(collate)
+// Constructor
+{
+}
+//---------------------------------------------------------------------------
+void BetweenExpression::generate(SQLWriter& out)
+// Generate SQL
+{
+   base->generateOperand(out);
+   out.write(" between ");
+   lower->generateOperand(out);
+   out.write(" and ");
+   upper->generateOperand(out);
+}
+//---------------------------------------------------------------------------
+InExpression::InExpression(unique_ptr<Expression> probe, vector<unique_ptr<Expression>> values, Collate collate)
+   : Expression(Type::getBool().withNullable(probe->getType().isNullable() || any_of(values.begin(), values.end(), [](auto& e) { return e->getType().isNullable(); }))), probe(move(probe)), values(move(values)), collate(collate)
+// Constructor
+{
+}
+//---------------------------------------------------------------------------
+void InExpression::generate(SQLWriter& out)
+// Generate SQL
+{
+   probe->generateOperand(out);
+   out.write(" in (");
+   bool first = true;
+   for (auto& v : values) {
+      if (first)
+         first = false;
+      else
+         out.write(", ");
+      v->generate(out);
+   }
+   out.write(")");
 }
 //---------------------------------------------------------------------------
 BinaryExpression::BinaryExpression(unique_ptr<Expression> left, unique_ptr<Expression> right, Type resultType, Operation op)
@@ -140,6 +181,136 @@ void UnaryExpression::generate(SQLWriter& out) const
       case Operation::Not: out.write(" not "); break;
    }
    input->generateOperand(out);
+}
+//---------------------------------------------------------------------------
+ExtractExpression::ExtractExpression(unique_ptr<Expression> input, Part part)
+   : Expression(Type::getInteger().withNullable(input->getType().isNullable())), input(move(input)), part(part)
+// Constructor
+{
+}
+//---------------------------------------------------------------------------
+void ExtractExpression::generate(SQLWriter& out)
+// Generate SQL
+{
+   out.write("extract(");
+   switch (part) {
+      case Part::Year: out.write("year"); break;
+      case Part::Month: out.write("month"); break;
+      case Part::Day: out.write("day"); break;
+   }
+   out.write(" from ");
+   input->generateOperand(out);
+   out.write(")");
+}
+//---------------------------------------------------------------------------
+SubstrExpression::SubstrExpression(unique_ptr<Expression> value, unique_ptr<Expression> from, unique_ptr<Expression> len)
+   : Expression(value->getType().withNullable(value->getType().isNullable() || (from ? from->getType().isNullable() : false) || (len ? len->getType().isNullable() : false))), value(move(value)), from(move(from)), len(move(len))
+// Constructor
+{
+}
+//---------------------------------------------------------------------------
+void SubstrExpression::generate(SQLWriter& out)
+// Generate SQL
+{
+   out.write("substring(");
+   value->generate(out);
+   if (from) {
+      out.write(" from ");
+      from->generate(out);
+   }
+   if (len) {
+      out.write(" for ");
+      len->generate(out);
+   }
+   out.write(")");
+}
+//---------------------------------------------------------------------------
+SimpleCaseExpression::SimpleCaseExpression(unique_ptr<Expression> value, Cases cases, unique_ptr<Expression> defaultValue)
+   : Expression(defaultValue->getType()), value(move(value)), cases(move(cases)), defaultValue(move(defaultValue))
+// Constructor
+{
+}
+//---------------------------------------------------------------------------
+void SimpleCaseExpression::generate(SQLWriter& out)
+// Generate SQL
+{
+   out.write("case ");
+   value->generateOperand(out);
+   for (auto& c : cases) {
+      out.write(" when ");
+      c.first->generate(out);
+      out.write(" then ");
+      c.second->generate(out);
+   }
+   out.write(" else ");
+   defaultValue->generate(out);
+   out.write(" end");
+}
+//---------------------------------------------------------------------------
+SearchedCaseExpression::SearchedCaseExpression(Cases cases, unique_ptr<Expression> defaultValue)
+   : Expression(defaultValue->getType()), cases(move(cases)), defaultValue(move(defaultValue))
+// Constructor
+{
+}
+//---------------------------------------------------------------------------
+void SearchedCaseExpression::generate(SQLWriter& out)
+// Generate SQL
+{
+   out.write("case");
+   for (auto& c : cases) {
+      out.write(" when ");
+      c.first->generate(out);
+      out.write(" then ");
+      c.second->generate(out);
+   }
+   out.write(" else ");
+   defaultValue->generate(out);
+   out.write(" end");
+}
+//---------------------------------------------------------------------------
+Aggregate::Aggregate(unique_ptr<Operator> input, vector<Aggregation> aggregates, unique_ptr<Expression> computation)
+   : Expression(computation->getType()), input(move(input)), aggregates(move(aggregates)), computation(move(computation))
+// Constructor
+{
+}
+//---------------------------------------------------------------------------
+void Aggregate::generate(SQLWriter& out)
+// Generate SQL
+{
+   out.write("(select ");
+   computation->generate(out);
+   if (!aggregates.empty()) {
+      out.write(" from (select ");
+      bool first = true;
+      for (auto& a : aggregates) {
+         if (first)
+            first = false;
+         else
+            out.write(", ");
+         switch (a.op) {
+            case Op::CountStar: out.write("count(*)"); break;
+            case Op::Count: out.write("count("); break;
+            case Op::CountDistinct: out.write("count(distinct "); break;
+            case Op::Sum: out.write("sum("); break;
+            case Op::SumDistinct: out.write("sum(distinct "); break;
+            case Op::Avg: out.write("avg("); break;
+            case Op::AvgDistinct: out.write("avg(distinct "); break;
+            case Op::Min: out.write("min("); break;
+            case Op::Max: out.write("max("); break;
+         }
+         if (a.op != Op::CountStar) {
+            a.value->generate(out);
+            out.write(")");
+         }
+         out.write(" as ");
+         out.writeIU(a.iu.get());
+      }
+      out.write(" from ");
+      input->generate(out);
+      out.write(" s");
+      out.write(") s");
+   }
+   out.write(")");
 }
 //---------------------------------------------------------------------------
 }
