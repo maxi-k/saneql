@@ -348,7 +348,7 @@ class SemanticAnalysis {
 
    public:
    /// Constructor
-   explicit SemanticAnalysis(Schema& schema) : schema(schema) {}
+   explicit SemanticAnalysis(const Schema& schema) : schema(schema) {}
 
    /// Analyze a query
    ExpressionResult analyzeQuery(const ast::AST* query);
