@@ -15,7 +15,7 @@ $(INTEGRATIONS_PREFIX)%.o: %.cpp
 
 $(INTEGRATIONS_PREFIX)%.so: $(INTEGRATIONS_PREFIX)%.o $(obj)
 	$(checkdir)
-	$(CXX) $(CXXFLAGS) -shared $< -o $@
+	$(CXX) $(CXXFLAGS) -shared -o $@ $^
 
 integrations: $(so_so)
 .PHONY: integrations

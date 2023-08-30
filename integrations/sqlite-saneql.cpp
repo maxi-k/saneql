@@ -1,7 +1,3 @@
-#include "compiler/SaneQLCompiler.hpp"
-#include "infra/Schema.hpp"
-#include "sql/SQLWriter.hpp"
-#include <string>
 /*
 ** 2018-04-19
 **
@@ -51,38 +47,114 @@
 #include "sqlite3ext.h"
 #endif
 SQLITE_EXTENSION_INIT1
+#include "compiler/SaneQLCompiler.hpp"
+#include "infra/Schema.hpp"
+#include "sql/SQLWriter.hpp"
 #include <string.h>
 #include <assert.h>
+
+#include <string>
+#include <fstream>
+#include <ostream>
+#include <stdexcept>
 
 /// C++ std allocator using sqlite3_malloc and sqlite3_free
 template <typename T>
 struct saneql_allocator {
-    using value_type = T;
-    saneql_allocator() = default;
-    template <typename U>
-    saneql_allocator(const saneql_allocator<U>&) {}
-    T* allocate(std::size_t n) {
-        return reinterpret_cast<T*>(sqlite3_malloc(n * sizeof(T)));
-    }
-    void deallocate(T* p, std::size_t) {
-        sqlite3_free(p);
-    }
+   using value_type = T;
+
+   // standard allocator methods
+
+   saneql_allocator() = default;
+   template <typename U>
+   saneql_allocator(const saneql_allocator<U>&) {}
+
+   T* allocate(std::size_t n) {
+      void* result = sqlite3_malloc(n * sizeof(T));
+      if (result == nullptr) { throw std::bad_alloc(); }
+      return reinterpret_cast<T*>(result);
+   }
+
+   void deallocate(T* p, std::size_t) noexcept {
+      sqlite3_free(p);
+   }
+
+   // static utility methods
+
+   template <typename... Args>
+   static T* make(Args&&... args) {
+      saneql_allocator<T> alloc;
+      return new (alloc.allocate(1)) T(std::forward<Args>(args)...);
+   }
+
+   static void destroy(T*&& p) {
+      saneql_allocator<T> alloc;
+      p->~T();
+      alloc.deallocate(p, 1);
+   }
 };
+
+#ifndef NDEBUG
+static std::ostream& get_log_file() {
+  static std::ofstream log_file("/tmp/sqlite-saneql.log");
+  return log_file;
+};
+
+template<typename... Args>
+static void saneql_log(const char* fmt, Args&&... args) {
+  static char buf[1024];
+  auto& stream = get_log_file();
+  snprintf(buf, sizeof(buf), fmt, std::forward<Args>(args)...);
+  stream << buf << std::endl;
+}
+#else
+template<typename... Args>
+static void saneql_log(const char*, Args&&...) {}
+#endif
 
 using str = std::basic_string<char, std::char_traits<char>, saneql_allocator<char>>;
 template<typename T>
 using vec = std::vector<T, saneql_allocator<T>>;
 
 
+struct saneql_table_data {
+   int nrow{0}, ncol{0};
+   vec<str> colnames;
+   vec<vec<str>> table;
+
+   saneql_table_data() = default;
+   saneql_table_data(saneql_table_data&&) = default;
+   saneql_table_data& operator=(saneql_table_data&&) = default;
+   // disallow copy
+   saneql_table_data(const saneql_table_data&) = delete;
+   saneql_table_data& operator=(const saneql_table_data&) = delete;
+
+   void initialize(int ncol, char** names) {
+      this->ncol = ncol;
+      colnames.resize(ncol);
+      table.resize(ncol);
+      for (int i = 0; i < ncol; i++) {
+         colnames[i] = names[i];
+      }
+   }
+
+   vec<str>& column(int i) { return table[i]; }
+   const vec<str>& column(int i) const { return table[i]; }
+};
+
 /* saneql_vtab is a subclass of sqlite3_vtab which is
 ** underlying representation of the virtual table
 */
-typedef struct saneql_vtab saneql_vtab;
 struct saneql_vtab {
-  sqlite3_vtab base;  /* Base class - must be first */
-  str saneQuery;
-  str compiledQuery;
-  /* Add new fields here, as necessary */
+  sqlite3_vtab base{nullptr, 0, nullptr};  /* Base class - must be first */
+  const str saneQuery;
+  const str compiledQuery;
+  const saneql_table_data table;
+
+  saneql_vtab(str&& saneQuery, str&& compiledQuery, saneql_table_data&& table)
+    : saneQuery(std::move(saneQuery))
+    , compiledQuery(std::move(compiledQuery))
+    , table(std::move(table)) {}
 };
 
 /* saneql_cursor is a subclass of sqlite3_vtab_cursor which will
@@ -91,64 +163,99 @@ struct saneql_vtab {
 */
 typedef struct saneql_cursor saneql_cursor;
 struct saneql_cursor {
-  sqlite3_vtab_cursor base;  /* Base class - must be first */
-  /* Insert new fields here.  For this saneql we only keep track
-  ** of the rowid */
-  sqlite3_int64 iRowid;      /* The rowid */
+  sqlite3_vtab_cursor base;
+  sqlite3_int64 current_row{0}, nrow{0};
+
+  saneql_cursor(sqlite3_vtab* pVtab, sqlite3_int64 current_row = 0)
+    : base{pVtab}
+    , current_row(current_row)
+    , nrow(vtab().table.nrow){}
+
+  bool isEof() const { return current_row >= nrow; }
+
+  saneql_vtab& vtab() {
+    return *reinterpret_cast<saneql_vtab*>(base.pVtab);
+  }
+
+  const saneql_vtab& vtab() const {
+    return *reinterpret_cast<const saneql_vtab*>(base.pVtab);
+  }
 };
 
-struct saneql_table_data {
-    int nrow{0}, ncol{0};
-    vec<str> colnames;
-    vec<vec<str>> table;
-
-    void initialize(int ncol, char** names) {
-        this->ncol = ncol;
-        colnames.resize(ncol);
-        table.resize(ncol);
-        for (int i = 0; i < ncol; i++) {
-           colnames[i] = names[i];
-        }
-    }
-};
-
-static int saneql_exec_callback(void *pCtx, int argc, char **argv, char **colnames) {
+static int saneql_exec_callback(void *pCtx, int argc, char **argv, char **colnames) noexcept {
    saneql_table_data& result = *reinterpret_cast<saneql_table_data*>(pCtx);
    if (result.ncol != argc) { // initialize result struct
-       result.initialize(argc, colnames);
-   }
+       result.initialize(argc, colnames); }
+   // TODO can we get the column types somehow?
    result.nrow++;
    for (int i = 0; i < argc; i++) {
       result.table[i].emplace_back(argv[i]);
    }
+   return SQLITE_OK;
 };
 
-static int saneql_compile_query(const char* saneQuery, char** result, char** error) {
+static str saneql_compile_query(const char* saneQuery) noexcept(false) {
    using namespace saneql;
    Schema schema;
    schema.populateSchema(); // use TPC-H schema TODO: use schema from sqlite3
    SQLWriter sql;
    SaneQLCompiler compiler(schema, sql);
-   try {
-      str result(compiler.compile(saneQuery));
-      char* target = reinterpret_cast<char*>(sqlite3_malloc(result.size() + 1));
-      strcpy(target, result.c_str());
-   } catch (const std::exception& e) {
-       const char* errstr = e.what();
-       *error = reinterpret_cast<char*>(sqlite3_malloc(strlen(errstr) + 1));
-       strcpy(*error, errstr);
-       return SQLITE_ERROR;
-   }
-   return SQLITE_OK;
+
+   str compiled(compiler.compile(saneQuery));
+   return compiled;
 }
 
-int saneql_build_vtable_string(char** result, saneql_table_data* eval_result, char** error) {
-    // TODO stub
-   str vtable_string = "CREATE TABLE x(a,b)";
-   char* target = reinterpret_cast<char*>(sqlite3_malloc(vtable_string.size() + 1));
-   strcpy(target, vtable_string.c_str());
-   *result = target;
-   return SQLITE_OK;
+static str saneql_build_vtable_string(const saneql_table_data& eval_result) {
+   // the table name itself is not important,
+   // see https://www.sqlite.org/vtab.html#the_xcreate_method
+   static str vtable_prefix = "CREATE TABLE x(";
+   str vtable_string = vtable_prefix;
+   for (auto& colname : eval_result.colnames) {
+      vtable_string += colname + " TEXT,";
+   }
+   // replace last comma with closing paren
+   vtable_string.back() = ')';
+   saneql_log("vtable string: %s", vtable_string.c_str());
+   return vtable_string;
+}
+
+static saneql_vtab* saneql_compile_and_build_vtab(
+  sqlite3& db,
+  [[maybe_unused]] void *pAux,
+  int argc, const char * const * argv) {
+  for (auto i = 0; i != argc; ++i) {
+    saneql_log("argv[%d] = %s", i, argv[i]);
+  }
+  /// result code and error string for sqlite functions
+  int rc; char* result_error{nullptr};
+  /// compile the saneql query
+  const char* sane_query = argv[1];
+  saneql_log("sane query: %s", sane_query);
+
+  str compiled_query = saneql_compile_query(sane_query);
+  saneql_log("compiled query: %s\b", compiled_query.c_str());
+
+  /// execute the saneql query
+  saneql_table_data eval_result;
+  rc = sqlite3_exec(&db, compiled_query.c_str(), saneql_exec_callback, &eval_result, &result_error);
+  if (rc != SQLITE_OK) {
+    saneql_log("error executing saneql query: %s", result_error);
+    throw std::runtime_error(result_error);
+  }
+
+  /// declare the virtual table
+  str vtabledef = saneql_build_vtable_string(eval_result);
+
+  rc = sqlite3_declare_vtab(&db, vtabledef.c_str());
+  if (rc != SQLITE_OK) {
+    saneql_log("error declaring virtual table: %s", sqlite3_errmsg(&db));
+    throw std::runtime_error(sqlite3_mprintf("error declaring virtual table: %s", sqlite3_errmsg(&db)));
+  }
+
+  return saneql_allocator<saneql_vtab>::make(
+    std::move(sane_query),
+    std::move(compiled_query),
+    std::move(eval_result));
 }
 
 /*
@@ -167,82 +274,47 @@ int saneql_build_vtable_string(char** result, saneql_table_data* eval_result, ch
 static int saneqlConnect(
   sqlite3 *db,
   void *pAux,
-  int argc, char **argv,
+  int argc, const char * const *argv,
   sqlite3_vtab **ppVtab,
-  char **pzErr
-){
-  assert(argc >= 1);
-  int rc;
-  /// compile the saneql query
-  const char* sane_query = argv[0];
-  char* compiled_query = nullptr;
-  char* result_error = nullptr;
-
-  rc = saneql_compile_query(sane_query, &compiled_query, &result_error);
-  if (rc != SQLITE_OK) {
-      *pzErr = result_error;
-      return rc;
+  char **pzErr) noexcept {
+  try {
+    saneql_vtab* vtab = saneql_compile_and_build_vtab(*db, pAux, argc, argv);
+    *ppVtab = &(vtab->base);
+    return SQLITE_OK;
+  } catch (const std::exception& e) {
+    *pzErr = sqlite3_mprintf("error compiling saneql query: %s", e.what());
+    return SQLITE_ERROR;
   }
-
-  /// execute the saneql query
-  saneql_table_data eval_result;
-  rc = sqlite3_exec(db, compiled_query, saneql_exec_callback, &eval_result, &result_error);
-  if (rc != SQLITE_OK) {
-      *pzErr = result_error;
-      return rc;
-  }
-
-  /// declare the virtual table
-  char* vtable_string = nullptr;
-  rc = saneql_build_vtable_string(&vtable_string, &eval_result, &result_error);
-  if (rc != SQLITE_OK) {
-     *pzErr = result_error;
-     return rc;
-  }
-
-  rc = sqlite3_declare_vtab(db, vtable_string);
-  sqlite3_free(vtable_string);
-  if (rc != SQLITE_OK) {
-     *pzErr = sqlite3_mprintf("error declaring virtual table: %s", sqlite3_errmsg(db));
-     return rc;
-  }
-
-    /// allocate the vtable data struct TODO
-  void* pNew = sqlite3_malloc(sizeof(saneql_vtab));
-  *ppVtab = (sqlite3_vtab*) pNew;
-  if (pNew == 0) return SQLITE_NOMEM;
-  memset(pNew, 0, sizeof(saneql_vtab));
-
-  return rc;
 }
 
 /*
 ** This method is the destructor for saneql_vtab objects.
 */
-static int saneqlDisconnect(sqlite3_vtab *pVtab){
-  saneql_vtab *p = (saneql_vtab*)pVtab;
-  sqlite3_free(p);
+static int saneqlDisconnect(sqlite3_vtab *pVtab) noexcept {
+  auto* vtab = reinterpret_cast<saneql_vtab*>(pVtab);
+  saneql_allocator<saneql_vtab>::destroy(std::move(vtab));
   return SQLITE_OK;
 }
 
 /*
 ** Constructor for a new saneql_cursor object.
 */
-static int saneqlOpen(sqlite3_vtab *p, sqlite3_vtab_cursor **ppCursor){
-  saneql_cursor *pCur;
-  pCur = sqlite3_malloc( sizeof(*pCur) );
-  if( pCur==0 ) return SQLITE_NOMEM;
-  memset(pCur, 0, sizeof(*pCur));
-  *ppCursor = &pCur->base;
-  return SQLITE_OK;
+static int saneqlOpen(sqlite3_vtab *p, sqlite3_vtab_cursor **ppCursor) {
+  try {
+    saneql_cursor *pCur = saneql_allocator<saneql_cursor>::make(p);
+    *ppCursor = &pCur->base;
+    return SQLITE_OK;
+  } catch (std::bad_alloc&) {
+    return SQLITE_NOMEM;
+  }
 }
 
 /*
 ** Destructor for a saneql_cursor.
 */
-static int saneqlClose(sqlite3_vtab_cursor *cur){
-  saneql_cursor *pCur = (saneql_cursor*)cur;
-  sqlite3_free(pCur);
+static int saneqlClose(sqlite3_vtab_cursor *cur) noexcept {
+  saneql_cursor* pCur = reinterpret_cast<saneql_cursor*>(cur);
+  saneql_allocator<saneql_cursor>::destroy(std::move(pCur));
   return SQLITE_OK;
 }
 
@@ -250,9 +322,9 @@ static int saneqlClose(sqlite3_vtab_cursor *cur){
 /*
 ** Advance a saneql_cursor to its next row of output.
 */
-static int saneqlNext(sqlite3_vtab_cursor *cur){
-  saneql_cursor *pCur = (saneql_cursor*)cur;
-  pCur->iRowid++;
+static int saneqlNext(sqlite3_vtab_cursor *cur) noexcept {
+  saneql_cursor *pCur = reinterpret_cast<saneql_cursor*>(cur);
+  pCur->current_row++;
   return SQLITE_OK;
 }
 
@@ -261,30 +333,30 @@ static int saneqlNext(sqlite3_vtab_cursor *cur){
 ** is currently pointing.
 */
 static int saneqlColumn(
-  sqlite3_vtab_cursor *cur,   /* The cursor */
-  sqlite3_context *ctx,       /* First argument to sqlite3_result_...() */
-  int i                       /* Which column to return */
-){
-  saneql_cursor *pCur = (saneql_cursor*)cur;
-  switch( i ){
-    case SANEQL_A:
-      sqlite3_result_int(ctx, 1000 + pCur->iRowid);
-      break;
-    default:
-      assert( i==SANEQL_B );
-      sqlite3_result_int(ctx, 2000 + pCur->iRowid);
-      break;
-  }
-  return SQLITE_OK;
+   sqlite3_vtab_cursor* cur, /* The cursor */
+   sqlite3_context* ctx, /* First argument to sqlite3_result_...() */
+   int i /* Which column to return */
+) noexcept {
+   try {
+      saneql_cursor* pCur = reinterpret_cast<saneql_cursor*>(cur);
+      auto& table = pCur->vtab().table;
+      const str& value = table.column(i)[pCur->current_row];
+      // TODO can we assume static here?
+      sqlite3_result_text(ctx, value.c_str(), value.size(), SQLITE_STATIC);
+      return SQLITE_OK;
+   } catch (const std::exception& e) {
+      sqlite3_result_error(ctx, e.what(), -1);
+      return SQLITE_ERROR;
+   }
 }
 
 /*
 ** Return the rowid for the current row.  In this implementation, the
 ** rowid is the same as the output value.
 */
-static int saneqlRowid(sqlite3_vtab_cursor *cur, sqlite_int64 *pRowid){
-  saneql_cursor *pCur = (saneql_cursor*)cur;
-  *pRowid = pCur->iRowid;
+static int saneqlRowid(sqlite3_vtab_cursor *cur, sqlite_int64 *pRowid) noexcept {
+  saneql_cursor *pCur = reinterpret_cast<saneql_cursor*>(cur);
+  *pRowid = pCur->current_row;
   return SQLITE_OK;
 }
 
@@ -293,8 +365,8 @@ static int saneqlRowid(sqlite3_vtab_cursor *cur, sqlite_int64 *pRowid){
 ** row of output.
 */
 static int saneqlEof(sqlite3_vtab_cursor *cur){
-  saneql_cursor *pCur = (saneql_cursor*)cur;
-  return pCur->iRowid>=10;
+  saneql_cursor *pCur = reinterpret_cast<saneql_cursor*>(cur);
+  return pCur->isEof();
 }
 
 /*
@@ -305,11 +377,11 @@ static int saneqlEof(sqlite3_vtab_cursor *cur){
 */
 static int saneqlFilter(
   sqlite3_vtab_cursor *pVtabCursor,
-  int idxNum, const char *idxStr,
-  int argc, sqlite3_value **argv
+  [[maybe_unused]] int idxNum, [[maybe_unused]] const char *idxStr,
+  [[maybe_unused]] int argc, [[maybe_unused]] sqlite3_value **argv
 ){
-  saneql_cursor *pCur = (saneql_cursor *)pVtabCursor;
-  pCur->iRowid = 1;
+  saneql_cursor *pCur = reinterpret_cast<saneql_cursor*>(pVtabCursor);
+  pCur->current_row = 0;
   return SQLITE_OK;
 }
 
@@ -323,8 +395,11 @@ static int saneqlBestIndex(
   sqlite3_vtab *tab,
   sqlite3_index_info *pIdxInfo
 ){
-  pIdxInfo->estimatedCost = (double)10;
-  pIdxInfo->estimatedRows = 10;
+  auto& vtab = *reinterpret_cast<saneql_vtab*>(tab);
+  pIdxInfo->estimatedCost = vtab.table.nrow;
+#if SQLITE_VERSION_NUMBER > 3008002
+  pIdxInfo->estimatedRows = vtab.table.nrow;
+#endif
   return SQLITE_OK;
 }
 
@@ -363,9 +438,9 @@ static sqlite3_module saneqlModule = {
 #ifdef _WIN32
 __declspec(dllexport)
 #endif
-int sqlite3_sqlitesaneql_init(
+extern "C" int sqlite3_sqlitesaneql_init(
   sqlite3 *db,
-  char **pzErrMsg,
+  [[maybe_unused]] char **pzErrMsg,
   const sqlite3_api_routines *pApi
 ){
   int rc = SQLITE_OK;
@@ -373,5 +448,3 @@ int sqlite3_sqlitesaneql_init(
   rc = sqlite3_create_module(db, "saneql", &saneqlModule, 0);
   return rc;
 }
-
-
