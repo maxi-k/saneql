@@ -19,7 +19,10 @@ std::string saneql::SaneQLCompiler::compile(const std::string& sqlQuery) {
    ASTContainer container;
    ast::AST* tree = nullptr;
    tree = SaneQLParser::parse(container, sqlQuery);
-
+   return compile(tree);
+}
+//---------------------------------------------------------------------------
+std::string saneql::SaneQLCompiler::compile(const ast::AST* tree) {
    SemanticAnalysis semana(schema);
    auto res = semana.analyzeQuery(tree);
    if (res.isScalar()) {

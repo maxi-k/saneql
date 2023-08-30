@@ -30,8 +30,7 @@ int main(int argc, char* argv[]) {
       return 1;
    }
 
-   Schema schema;
-   schema.populateSchema(); // use TPC-H schema
+   TPCHSchema schema; // use TPC-H schema for the CLI
    SQLWriter sql;
    SaneQLCompiler compiler(schema, sql);
 

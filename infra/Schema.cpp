@@ -23,15 +23,15 @@ string Type::getName() const
    __builtin_unreachable();
 }
 //---------------------------------------------------------------------------
-void Schema::createTable(std::string name, std::initializer_list<Column> columns)
+void TPCHSchema::createTable(std::string name, std::initializer_list<Column> columns)
 // Create a table
 {
    auto& t = tables[name];
    t.columns.assign(columns.begin(), columns.end());
 }
 //---------------------------------------------------------------------------
-void Schema::createTPCH()
-// Create the TPC-H schema for experiments
+void TPCHSchema::populateSchema()
+// Create initial schema objects
 {
    createTable("part", {{"p_partkey", Type::getInteger()}, {"p_name", Type::getVarchar(55)}, {"p_mfgr", Type::getChar(25)}, {"p_brand", Type::getChar(10)}, {"p_type", Type::getVarchar(25)}, {"p_size", Type::getInteger()}, {"p_container", Type::getChar(10)}, {"p_retailprice", Type::getDecimal(12, 2)}, {"p_comment", Type::getVarchar(23)}});
    createTable("region", {{"r_regionkey", Type::getInteger()}, {"r_name", Type::getChar(25)}, {"r_comment", Type::getVarchar(152)}});
@@ -43,14 +43,7 @@ void Schema::createTPCH()
    createTable("lineitem", {{"l_orderkey", Type::getInteger()}, {"l_partkey", Type::getInteger()}, {"l_suppkey", Type::getInteger()}, {"l_linenumber", Type::getInteger()}, {"l_quantity", Type::getDecimal(12, 2)}, {"l_extendedprice", Type::getDecimal(12, 2)}, {"l_discount", Type::getDecimal(12, 2)}, {"l_tax", Type::getDecimal(12, 2)}, {"l_returnflag", Type::getChar(1)}, {"l_linestatus", Type::getChar(1)}, {"l_shipdate", Type::getDate()}, {"l_commitdate", Type::getDate()}, {"l_receiptdate", Type::getDate()}, {"l_shipinstruct", Type::getChar(25)}, {"l_shipmode", Type::getChar(10)}, {"l_comment", Type::getVarchar(44)}});
 }
 //---------------------------------------------------------------------------
-void Schema::populateSchema()
-// Create initial schema objects
-{
-   // For now we hard-code TPC-H for experiments
-   createTPCH();
-}
-//---------------------------------------------------------------------------
-const Schema::Table* Schema::lookupTable(const std::string& name) const
+const Schema::Table* TPCHSchema::lookupTable(const std::string& name) const
 // Check if a table exists in the schema
 {
    auto iter = tables.find(name);

@@ -196,8 +196,7 @@ static int saneql_exec_callback(void *pCtx, int argc, char **argv, char **colnam
 
 static str saneql_compile_query(const char* saneQuery) noexcept(false) {
    using namespace saneql;
-   Schema schema;
-   schema.populateSchema(); // use TPC-H schema TODO: use schema from sqlite3
+   TPCHSchema schema; // TODO: use actual database schema
    SQLWriter sql;
    SaneQLCompiler compiler(schema, sql);
 
@@ -224,7 +223,7 @@ static saneql_vtab* saneql_compile_and_build_vtab(
   [[maybe_unused]] void *pAux,
   int argc, const char * const * argv) {
   for (auto i = 0; i != argc; ++i) {
-    saneql_log("argv[%d] = %s", i, argv[i]);
+    saneql_log("compile argv[%d] = %s", i, argv[i]);
   }
   /// result code and error string for sqlite functions
   int rc; char* result_error{nullptr};
@@ -277,6 +276,25 @@ static int saneqlConnect(
   int argc, const char * const *argv,
   sqlite3_vtab **ppVtab,
   char **pzErr) noexcept {
+  try {
+    saneql_vtab* vtab = saneql_compile_and_build_vtab(*db, pAux, argc, argv);
+    *ppVtab = &(vtab->base);
+    return SQLITE_OK;
+  } catch (const std::exception& e) {
+    *pzErr = sqlite3_mprintf("error compiling saneql query: %s", e.what());
+    return SQLITE_ERROR;
+  }
+}
+
+static int saneqlCreate(
+  sqlite3 *db,
+  void *pAux,
+  int argc, const char * const *argv,
+  sqlite3_vtab **ppVtab,
+  char **pzErr) noexcept {
+  for (auto i = 0; i != argc; ++i) {
+    saneql_log("create argv[%d] = %s", i, argv[i]);
+  }
   try {
     saneql_vtab* vtab = saneql_compile_and_build_vtab(*db, pAux, argc, argv);
     *ppVtab = &(vtab->base);
@@ -380,6 +398,9 @@ static int saneqlFilter(
   [[maybe_unused]] int idxNum, [[maybe_unused]] const char *idxStr,
   [[maybe_unused]] int argc, [[maybe_unused]] sqlite3_value **argv
 ){
+  for (auto i = 0; i != argc; ++i) {
+    saneql_log("filter argv[%d] = %s", i, argv[i]);
+  }
   saneql_cursor *pCur = reinterpret_cast<saneql_cursor*>(pVtabCursor);
   pCur->current_row = 0;
   return SQLITE_OK;
@@ -408,8 +429,8 @@ static int saneqlBestIndex(
 ** virtual table.
 */
 static sqlite3_module saneqlModule = {
-  /* iVersion    */ 0,
-  /* xCreate     */ 0,
+  /* iVersion    */ 3,
+  /* xCreate     */ saneqlCreate,
   /* xConnect    */ saneqlConnect,
   /* xBestIndex  */ saneqlBestIndex,
   /* xDisconnect */ saneqlDisconnect,
@@ -446,5 +467,6 @@ extern "C" int sqlite3_sqlitesaneql_init(
   int rc = SQLITE_OK;
   SQLITE_EXTENSION_INIT2(pApi);
   rc = sqlite3_create_module(db, "saneql", &saneqlModule, 0);
+  saneql_log("registered %s extension with rc %d %p", "saneql", rc, saneqlModule);
   return rc;
 }

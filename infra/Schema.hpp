@@ -83,8 +83,7 @@ class Type {
 };
 //---------------------------------------------------------------------------
 /// Access to the database schema
-class Schema {
-   public:
+struct Schema {
    /// A column definition
    struct Column {
       /// The name
@@ -98,7 +97,14 @@ class Schema {
       std::vector<Column> columns;
    };
 
-   private:
+   virtual ~Schema() = default;
+
+   /// Check if a table exists in the schema
+   virtual const Table* lookupTable(const std::string& name) const = 0;
+};
+//---------------------------------------------------------------------------
+/// TPC-H test schema
+class TPCHSchema final : public Schema {
    /// The tables
    std::unordered_map<std::string, Table> tables;
 
@@ -106,15 +112,18 @@ class Schema {
    void createTable(std::string name, std::initializer_list<Column> columns);
    /// Create the TPC-H schema
    void createTPCH();
-
-   public:
    /// Create some test schema for experiments
    void populateSchema();
 
+   public:
+
+   virtual ~TPCHSchema() = default;
+
+   TPCHSchema() { populateSchema(); }
+
    /// Check if a table exists in the schema
-   const Table* lookupTable(const std::string& name) const;
+   const Table* lookupTable(const std::string& name) const override;
 };
-//---------------------------------------------------------------------------
 }
 //---------------------------------------------------------------------------
 #endif

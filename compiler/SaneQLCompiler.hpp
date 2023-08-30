@@ -7,6 +7,7 @@ namespace saneql {
 //---------------------------------------------------------------------------
 class Schema;
 class SQLWriter;
+namespace ast { class AST; }
 //---------------------------------------------------------------------------
 class SaneQLCompiler {
     /// the schema to compile against
@@ -16,6 +17,7 @@ class SaneQLCompiler {
     public:
     SaneQLCompiler(const Schema& schema, SQLWriter& sqlWriter);
     std::string compile(const std::string& sqlQuery);
+    std::string compile(const ast::AST* saneqlAst);
 };
 }
 //---------------------------------------------------------------------------

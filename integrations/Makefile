@@ -2,7 +2,7 @@
 # from root project Makefile are included
 
 INTEGRATIONS_PREFIX=$(PREFIX)integrations/
-so_src:=integrations/sqlite-saneql.cpp
+so_src:=integrations/sqlite-saneql.cpp integrations/duckdb-saneql.cpp
 so_obj:=$(addprefix $(PREFIX),$(so_src:.cpp=.o))
 so_so:=$(addprefix $(PREFIX),$(so_src:.cpp=.so))
 
