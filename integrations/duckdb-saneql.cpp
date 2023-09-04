@@ -111,18 +111,18 @@ class DuckDBSchema final : public saneql::Schema {
          return &existing->second;
       }
       // TODO probably non exhaustive
-      if (auto found = Catalog::GetEntry(ctx, CatalogType::TABLE_ENTRY, INVALID_CATALOG, INVALID_SCHEMA, name)) {
+      if (auto found = Catalog::GetEntry(ctx, CatalogType::TABLE_ENTRY, INVALID_CATALOG, INVALID_SCHEMA, name, true)) {
          Table result;
          if (auto table = dynamic_cast<TableCatalogEntry*>(found)) {
             auto& it = table->GetColumns();
             result.columns.reserve(it.LogicalColumnCount());
             for (auto& coldef : it.Logical()) {
-               result.columns.emplace_back(coldef.GetName(), duckToSaneType(coldef.GetType()));
+               result.columns.emplace_back(StringUtil::Lower(coldef.GetName()), duckToSaneType(coldef.GetType()));
             }
          } else if (auto view = dynamic_cast<ViewCatalogEntry*>(found)) {
             result.columns.reserve(view->aliases.size());
             for (auto i = 0; i != view->aliases.size(); ++i) {
-               result.columns.emplace_back(view->aliases[i], duckToSaneType(view->types[i]));
+               result.columns.emplace_back(StringUtil::Lower(view->aliases[i]), duckToSaneType(view->types[i]));
             }
          } else {
             log() << "unknown catalog entry " << typeid(found).name() << std::endl;
