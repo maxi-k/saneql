@@ -12,12 +12,13 @@
 //---------------------------------------------------------------------------
 namespace saneql {
 //---------------------------------------------------------------------------
-class SQLWriter;
+struct OperatorVisitor;
+struct ConstOperatorVisitor;
 //---------------------------------------------------------------------------
 namespace algebra {
 //---------------------------------------------------------------------------
 /// An information unit
-class IU {
+struct IU {
    /// The type
    Type type;
 
@@ -29,18 +30,19 @@ class IU {
    const Type& getType() const { return type; }
 };
 //---------------------------------------------------------------------------
-/// Base class for operators
-class Operator {
+/// Base struct for operators
+struct Operator {
    public:
    /// Destructor
    virtual ~Operator();
 
-   // Generate SQL
-   virtual void generate(SQLWriter& out) = 0;
+   // Traverse Operator
+   virtual void traverse(OperatorVisitor& visitor) = 0;
+   virtual void traverse(ConstOperatorVisitor& visitor) const = 0;
 };
 //---------------------------------------------------------------------------
 /// A table scan operator
-class TableScan : public Operator {
+struct TableScan : public Operator {
    public:
    /// A column entry
    struct Column {
@@ -50,7 +52,6 @@ class TableScan : public Operator {
       std::unique_ptr<IU> iu;
    };
 
-   private:
    /// The table name
    std::string name;
    /// The columns
@@ -60,12 +61,13 @@ class TableScan : public Operator {
    /// Constructor
    TableScan(std::string name, std::vector<Column> columns);
 
-   // Generate SQL
-   void generate(SQLWriter& out) override;
+   // Traverse Operator
+   void traverse(OperatorVisitor& visitor) override;
+   void traverse(ConstOperatorVisitor& visitor) const override;
 };
 //---------------------------------------------------------------------------
 /// A select operator
-class Select : public Operator {
+struct Select : public Operator {
    /// The input
    std::unique_ptr<Operator> input;
    /// The filter condition
@@ -75,16 +77,16 @@ class Select : public Operator {
    /// Constructor
    Select(std::unique_ptr<Operator> input, std::unique_ptr<Expression> condition);
 
-   // Generate SQL
-   void generate(SQLWriter& out) override;
+   // Traverse Operator
+   void traverse(OperatorVisitor& visitor) override;
+   void traverse(ConstOperatorVisitor& visitor) const override;
 };
 //---------------------------------------------------------------------------
 /// A map operator
-class Map : public Operator {
+struct Map : public Operator {
    public:
    using Entry = AggregationLike::Entry;
 
-   private:
    /// The input
    std::unique_ptr<Operator> input;
    /// The computations
@@ -94,15 +96,16 @@ class Map : public Operator {
    /// Constructor
    Map(std::unique_ptr<Operator> input, std::vector<Entry> computations);
 
-   // Generate SQL
-   void generate(SQLWriter& out) override;
+   // Traverse Operator
+   void traverse(OperatorVisitor& visitor) override;
+   void traverse(ConstOperatorVisitor& visitor) const override;
 };
 //---------------------------------------------------------------------------
 /// A set operation operator
-class SetOperation : public Operator {
+struct SetOperation : public Operator {
    public:
    /// Operation types
-   enum class Op {
+   enum struct Op {
       Union,
       UnionAll,
       Except,
@@ -111,7 +114,6 @@ class SetOperation : public Operator {
       IntersectAll
    };
 
-   private:
    /// The input
    std::unique_ptr<Operator> left, right;
    /// The input columns
@@ -125,15 +127,16 @@ class SetOperation : public Operator {
    /// Constructor
    SetOperation(std::unique_ptr<Operator> left, std::unique_ptr<Operator> right, std::vector<std::unique_ptr<Expression>> leftColumns, std::vector<std::unique_ptr<Expression>> rightColumns, std::vector<std::unique_ptr<IU>> resultColumns, Op op);
 
-   // Generate SQL
-   void generate(SQLWriter& out) override;
+   // Traverse Operator
+   void traverse(OperatorVisitor& visitor) override;
+   void traverse(ConstOperatorVisitor& visitor) const override;
 };
 //---------------------------------------------------------------------------
 /// A join operator
-class Join : public Operator {
+struct Join : public Operator {
    public:
    /// Join types
-   enum class JoinType {
+   enum struct JoinType {
       Inner,
       LeftOuter,
       RightOuter,
@@ -144,7 +147,6 @@ class Join : public Operator {
       RightAnti
    };
 
-   private:
    /// The input
    std::unique_ptr<Operator> left, right;
    /// The join condition
@@ -156,13 +158,13 @@ class Join : public Operator {
    /// Constructor
    Join(std::unique_ptr<Operator> left, std::unique_ptr<Operator> right, std::unique_ptr<Expression> condition, JoinType joinType);
 
-   // Generate SQL
-   void generate(SQLWriter& out) override;
+   // Traverse Operator
+   void traverse(OperatorVisitor& visitor) override;
+   void traverse(ConstOperatorVisitor& visitor) const override;
 };
 //---------------------------------------------------------------------------
 /// A group by operator
-class GroupBy : public Operator, public AggregationLike {
-   private:
+struct GroupBy : public Operator, public AggregationLike {
    /// The input
    std::unique_ptr<Operator> input;
    /// The group by expressions
@@ -174,12 +176,13 @@ class GroupBy : public Operator, public AggregationLike {
    /// Constructor
    GroupBy(std::unique_ptr<Operator> input, std::vector<Entry> groupBy, std::vector<Aggregation> aggregates);
 
-   // Generate SQL
-   void generate(SQLWriter& out) override;
+   // Traverse Operator
+   void traverse(OperatorVisitor& visitor) override;
+   void traverse(ConstOperatorVisitor& visitor) const override;
 };
 //---------------------------------------------------------------------------
 /// A sort operator
-class Sort : public Operator {
+struct Sort : public Operator {
    public:
    struct Entry {
       /// The value to order by
@@ -201,16 +204,16 @@ class Sort : public Operator {
    /// Constructor
    Sort(std::unique_ptr<Operator> input, std::vector<Entry> order, std::optional<uint64_t> limit, std::optional<uint64_t> offset);
 
-   // Generate SQL
-   void generate(SQLWriter& out) override;
+   // Traverse Operator
+   void traverse(OperatorVisitor& visitor) override;
+   void traverse(ConstOperatorVisitor& visitor) const override;
 };
 //---------------------------------------------------------------------------
 /// A window operator
-class Window : public Operator, public AggregationLike {
+struct Window : public Operator, public AggregationLike {
    public:
    using Op = WindowOp;
 
-   private:
    /// The input
    std::unique_ptr<Operator> input;
    /// The aggregates
@@ -224,12 +227,13 @@ class Window : public Operator, public AggregationLike {
    /// Constructor
    Window(std::unique_ptr<Operator> input, std::vector<Aggregation> aggregates, std::vector<std::unique_ptr<Expression>> partitionBy, std::vector<Sort::Entry> orderBy);
 
-   // Generate SQL
-   void generate(SQLWriter& out) override;
+   // Traverse Operator
+   void traverse(OperatorVisitor& visitor) override;
+   void traverse(ConstOperatorVisitor& visitor) const override;
 };
 //---------------------------------------------------------------------------
 /// An inline table definition
-class InlineTable : public Operator {
+struct InlineTable : public Operator {
    public:
    /// The columns
    std::vector<std::unique_ptr<algebra::IU>> columns;
@@ -242,8 +246,9 @@ class InlineTable : public Operator {
    /// Constructor
    InlineTable(std::vector<std::unique_ptr<algebra::IU>> columns, std::vector<std::unique_ptr<algebra::Expression>> values, unsigned rowCount);
 
-   // Generate SQL
-   void generate(SQLWriter& out) override;
+   // Traverse Operator
+   void traverse(OperatorVisitor& visitor) override;
+   void traverse(ConstOperatorVisitor& visitor) const override;
 };
 //---------------------------------------------------------------------------
 }

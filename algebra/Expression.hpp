@@ -12,15 +12,16 @@
 namespace saneql {
 //---------------------------------------------------------------------------
 enum class Collate : uint8_t;
-class SQLWriter;
 //---------------------------------------------------------------------------
 namespace algebra {
 //---------------------------------------------------------------------------
 class IU;
 class Operator;
+class ExpressionVisitor;
+class ConstExpressionVisitor;
 //---------------------------------------------------------------------------
-/// Base class for expressions
-class Expression {
+/// Base struct for expressions
+struct Expression {
    private:
    /// The type
    Type type;
@@ -34,14 +35,13 @@ class Expression {
    /// Get the result type
    Type getType() const { return type; }
 
-   /// Generate SQL
-   virtual void generate(SQLWriter& out) = 0;
-   /// Generate SQL in a form that is suitable as operand
-   virtual void generateOperand(SQLWriter& out);
+   /// Traverse Expressions
+   virtual void traverse(ExpressionVisitor& visitor) = 0;
+   virtual void traverse(ConstExpressionVisitor& visitor) const = 0;
 };
 //---------------------------------------------------------------------------
 /// An IU reference
-class IURef : public Expression {
+struct IURef : public Expression {
    /// The IU
    const IU* iu;
 
@@ -52,14 +52,13 @@ class IURef : public Expression {
    /// Get the IU
    const IU* getIU() const { return iu; }
 
-   /// Generate SQL
-   void generate(SQLWriter& out) override;
-   /// Generate SQL in a form that is suitable as operand
-   void generateOperand(SQLWriter& out) override { generate(out); }
+   /// Traverse Expressions
+   void traverse(ExpressionVisitor& visitor) override;
+   void traverse(ConstExpressionVisitor& visitor) const override;
 };
 //---------------------------------------------------------------------------
 /// A constant value
-class ConstExpression : public Expression {
+struct ConstExpression : public Expression {
    /// The raw value
    std::string value;
    /// NULL?
@@ -71,14 +70,13 @@ class ConstExpression : public Expression {
    /// Constructor for NULL values
    ConstExpression(std::nullptr_t, Type type) : Expression(type), null(true) {}
 
-   /// Generate SQL
-   void generate(SQLWriter& out) override;
-   /// Generate SQL in a form that is suitable as operand
-   void generateOperand(SQLWriter& out) override { generate(out); }
+   /// Traverse Expressions
+   void traverse(ExpressionVisitor& visitor) override;
+   void traverse(ConstExpressionVisitor& visitor) const override;
 };
 //---------------------------------------------------------------------------
 /// A cast expression
-class CastExpression : public Expression {
+struct CastExpression : public Expression {
    /// The input
    std::unique_ptr<Expression> input;
 
@@ -86,12 +84,13 @@ class CastExpression : public Expression {
    /// Constructor
    CastExpression(std::unique_ptr<Expression> input, Type type) : Expression(type), input(move(input)) {}
 
-   /// Generate SQL
-   void generate(SQLWriter& out) override;
+   /// Traverse Expressions
+   void traverse(ExpressionVisitor& visitor) override;
+   void traverse(ConstExpressionVisitor& visitor) const override;
 };
 //---------------------------------------------------------------------------
 /// A comparison expression
-class ComparisonExpression : public Expression {
+struct ComparisonExpression : public Expression {
    public:
    /// Possible modes
    enum Mode {
@@ -116,12 +115,13 @@ class ComparisonExpression : public Expression {
    /// Constructor
    ComparisonExpression(std::unique_ptr<Expression> left, std::unique_ptr<Expression> right, Mode mode, Collate collate);
 
-   /// Generate SQL
-   void generate(SQLWriter& out) override;
+   /// Traverse Expressions
+   void traverse(ExpressionVisitor& visitor) override;
+   void traverse(ConstExpressionVisitor& visitor) const override;
 };
 //---------------------------------------------------------------------------
 /// A between expression
-class BetweenExpression : public Expression {
+struct BetweenExpression : public Expression {
    public:
    /// The input
    std::unique_ptr<Expression> base, lower, upper;
@@ -132,12 +132,13 @@ class BetweenExpression : public Expression {
    /// Constructor
    BetweenExpression(std::unique_ptr<Expression> base, std::unique_ptr<Expression> lower, std::unique_ptr<Expression> upper, Collate collate);
 
-   /// Generate SQL
-   void generate(SQLWriter& out) override;
+   /// Traverse Expressions
+   void traverse(ExpressionVisitor& visitor) override;
+   void traverse(ConstExpressionVisitor& visitor) const override;
 };
 //---------------------------------------------------------------------------
 /// An in expression
-class InExpression : public Expression {
+struct InExpression : public Expression {
    public:
    /// The input
    std::unique_ptr<Expression> probe;
@@ -150,12 +151,13 @@ class InExpression : public Expression {
    /// Constructor
    InExpression(std::unique_ptr<Expression> probe, std::vector<std::unique_ptr<Expression>> values, Collate collate);
 
-   /// Generate SQL
-   void generate(SQLWriter& out) override;
+   /// Traverse Expressions
+   void traverse(ExpressionVisitor& visitor) override;
+   void traverse(ConstExpressionVisitor& visitor) const override;
 };
 //---------------------------------------------------------------------------
 /// A binary expression
-class BinaryExpression : public Expression {
+struct BinaryExpression : public Expression {
    public:
    /// Possible operations
    enum Operation {
@@ -178,12 +180,13 @@ class BinaryExpression : public Expression {
    /// Constructor
    BinaryExpression(std::unique_ptr<Expression> left, std::unique_ptr<Expression> right, Type resultType, Operation op);
 
-   /// Generate SQL
-   void generate(SQLWriter& out) override;
+   /// Traverse Expressions
+   void traverse(ExpressionVisitor& visitor) override;
+   void traverse(ConstExpressionVisitor& visitor) const override;
 };
 //---------------------------------------------------------------------------
 /// An unary expression
-class UnaryExpression : public Expression {
+struct UnaryExpression : public Expression {
    public:
    /// Possible operations
    enum Operation {
@@ -200,12 +203,13 @@ class UnaryExpression : public Expression {
    /// Constructor
    UnaryExpression(std::unique_ptr<Expression> input, Type resultType, Operation op);
 
-   /// Generate SQL
-   void generate(SQLWriter& out) override;
+   /// Traverse Expressions
+   void traverse(ExpressionVisitor& visitor) override;
+   void traverse(ConstExpressionVisitor& visitor) const override;
 };
 //---------------------------------------------------------------------------
 /// An extract expression
-class ExtractExpression : public Expression {
+struct ExtractExpression : public Expression {
    public:
    /// Possible parts
    enum Part {
@@ -222,12 +226,13 @@ class ExtractExpression : public Expression {
    /// Constructor
    ExtractExpression(std::unique_ptr<Expression> input, Part part);
 
-   /// Generate SQL
-   void generate(SQLWriter& out) override;
+   /// Traverse Expressions
+   void traverse(ExpressionVisitor& visitor) override;
+   void traverse(ConstExpressionVisitor& visitor) const override;
 };
 //---------------------------------------------------------------------------
 /// A substring expression
-class SubstrExpression : public Expression {
+struct SubstrExpression : public Expression {
    public:
    /// The input
    std::unique_ptr<Expression> value, from, len;
@@ -236,12 +241,13 @@ class SubstrExpression : public Expression {
    /// Constructor
    SubstrExpression(std::unique_ptr<Expression> value, std::unique_ptr<Expression> from, std::unique_ptr<Expression> len);
 
-   /// Generate SQL
-   void generate(SQLWriter& out) override;
+   /// Traverse Expressions
+   void traverse(ExpressionVisitor& visitor) override;
+   void traverse(ConstExpressionVisitor& visitor) const override;
 };
 //---------------------------------------------------------------------------
 /// A simple case expression
-class SimpleCaseExpression : public Expression {
+struct SimpleCaseExpression : public Expression {
    public:
    using Cases = std::vector<std::pair<std::unique_ptr<algebra::Expression>, std::unique_ptr<algebra::Expression>>>;
 
@@ -256,12 +262,13 @@ class SimpleCaseExpression : public Expression {
    /// Constructor
    SimpleCaseExpression(std::unique_ptr<Expression> value, Cases cases, std::unique_ptr<Expression> defaultValue);
 
-   /// Generate SQL
-   void generate(SQLWriter& out) override;
+   /// Traverse Expressions
+   void traverse(ExpressionVisitor& visitor) override;
+   void traverse(ConstExpressionVisitor& visitor) const override;
 };
 //---------------------------------------------------------------------------
 /// A searched case expression
-class SearchedCaseExpression : public Expression {
+struct SearchedCaseExpression : public Expression {
    public:
    using Cases = SimpleCaseExpression::Cases;
 
@@ -274,8 +281,9 @@ class SearchedCaseExpression : public Expression {
    /// Constructor
    SearchedCaseExpression(Cases cases, std::unique_ptr<Expression> defaultValue);
 
-   /// Generate SQL
-   void generate(SQLWriter& out) override;
+   /// Traverse Expressions
+   void traverse(ExpressionVisitor& visitor) override;
+   void traverse(ConstExpressionVisitor& visitor) const override;
 };
 //---------------------------------------------------------------------------
 /// Helper for aggregation steps
@@ -288,7 +296,7 @@ struct AggregationLike {
       std::unique_ptr<algebra::IU> iu;
    };
    /// Known aggregation functions
-   enum class Op {
+   enum struct Op {
       CountStar,
       Count,
       CountDistinct,
@@ -300,7 +308,7 @@ struct AggregationLike {
       AvgDistinct
    };
    /// Known window functions
-   enum class WindowOp {
+   enum struct WindowOp {
       CountStar,
       Count,
       CountDistinct,
@@ -326,8 +334,7 @@ struct AggregationLike {
 };
 //---------------------------------------------------------------------------
 /// An aggregate expression
-class Aggregate : public Expression, public AggregationLike {
-   private:
+struct Aggregate : public Expression, public AggregationLike {
    /// The input
    std::unique_ptr<Operator> input;
    /// The aggregates
@@ -339,17 +346,17 @@ class Aggregate : public Expression, public AggregationLike {
    /// Constructor
    Aggregate(std::unique_ptr<Operator> input, std::vector<Aggregation> aggregates, std::unique_ptr<Expression> computation);
 
-   // Generate SQL
-   void generate(SQLWriter& out) override;
+   // Traverse Expressions
+   void traverse(ExpressionVisitor& visitor) override;
+   void traverse(ConstExpressionVisitor& visitor) const override;
 };
 //---------------------------------------------------------------------------
 /// A foreign call expression
 struct ForeignCall : public Expression {
-   // Type of the generated call
-   enum class CallType { Function, LeftAssocOperator, RightAssocOperator };
+   // Type of the traversed call
+   enum struct CallType { Function, LeftAssocOperator, RightAssocOperator };
    static constexpr CallType defaultType() { return CallType::Function; }
 
-   private:
    /// The name of the declared function
    std::string name;
    /// The function call arguments
@@ -361,8 +368,9 @@ struct ForeignCall : public Expression {
    /// Constructor
    ForeignCall(std::string name, Type returnType, std::vector<std::unique_ptr<Expression>> arguments, CallType callType);
 
-   /// Generate SQL
-   void generate(SQLWriter& out) override;
+   /// Traverse Expressions
+   void traverse(ExpressionVisitor& visitor) override;
+   void traverse(ConstExpressionVisitor& visitor) const override;
 };
 //---------------------------------------------------------------------------
 }
