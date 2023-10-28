@@ -37,8 +37,8 @@ struct Operator {
    virtual ~Operator();
 
    // Traverse Operator
-   virtual void traverse(OperatorVisitor& visitor) = 0;
-   virtual void traverse(ConstOperatorVisitor& visitor) const = 0;
+   virtual void traverse(OperatorVisitor& out) = 0;
+   virtual void traverse(ConstOperatorVisitor& out) const = 0;
 };
 //---------------------------------------------------------------------------
 /// A table scan operator
@@ -62,8 +62,8 @@ struct TableScan : public Operator {
    TableScan(std::string name, std::vector<Column> columns);
 
    // Traverse Operator
-   void traverse(OperatorVisitor& visitor) override;
-   void traverse(ConstOperatorVisitor& visitor) const override;
+   void traverse(OperatorVisitor& out) override;
+   void traverse(ConstOperatorVisitor& out) const override;
 };
 //---------------------------------------------------------------------------
 /// A select operator
@@ -78,8 +78,8 @@ struct Select : public Operator {
    Select(std::unique_ptr<Operator> input, std::unique_ptr<Expression> condition);
 
    // Traverse Operator
-   void traverse(OperatorVisitor& visitor) override;
-   void traverse(ConstOperatorVisitor& visitor) const override;
+   void traverse(OperatorVisitor& out) override;
+   void traverse(ConstOperatorVisitor& out) const override;
 };
 //---------------------------------------------------------------------------
 /// A map operator
@@ -97,8 +97,8 @@ struct Map : public Operator {
    Map(std::unique_ptr<Operator> input, std::vector<Entry> computations);
 
    // Traverse Operator
-   void traverse(OperatorVisitor& visitor) override;
-   void traverse(ConstOperatorVisitor& visitor) const override;
+   void traverse(OperatorVisitor& out) override;
+   void traverse(ConstOperatorVisitor& out) const override;
 };
 //---------------------------------------------------------------------------
 /// A set operation operator
@@ -128,8 +128,8 @@ struct SetOperation : public Operator {
    SetOperation(std::unique_ptr<Operator> left, std::unique_ptr<Operator> right, std::vector<std::unique_ptr<Expression>> leftColumns, std::vector<std::unique_ptr<Expression>> rightColumns, std::vector<std::unique_ptr<IU>> resultColumns, Op op);
 
    // Traverse Operator
-   void traverse(OperatorVisitor& visitor) override;
-   void traverse(ConstOperatorVisitor& visitor) const override;
+   void traverse(OperatorVisitor& out) override;
+   void traverse(ConstOperatorVisitor& out) const override;
 };
 //---------------------------------------------------------------------------
 /// A join operator
@@ -159,8 +159,8 @@ struct Join : public Operator {
    Join(std::unique_ptr<Operator> left, std::unique_ptr<Operator> right, std::unique_ptr<Expression> condition, JoinType joinType);
 
    // Traverse Operator
-   void traverse(OperatorVisitor& visitor) override;
-   void traverse(ConstOperatorVisitor& visitor) const override;
+   void traverse(OperatorVisitor& out) override;
+   void traverse(ConstOperatorVisitor& out) const override;
 };
 //---------------------------------------------------------------------------
 /// A group by operator
@@ -177,8 +177,8 @@ struct GroupBy : public Operator, public AggregationLike {
    GroupBy(std::unique_ptr<Operator> input, std::vector<Entry> groupBy, std::vector<Aggregation> aggregates);
 
    // Traverse Operator
-   void traverse(OperatorVisitor& visitor) override;
-   void traverse(ConstOperatorVisitor& visitor) const override;
+   void traverse(OperatorVisitor& out) override;
+   void traverse(ConstOperatorVisitor& out) const override;
 };
 //---------------------------------------------------------------------------
 /// A sort operator
@@ -205,8 +205,8 @@ struct Sort : public Operator {
    Sort(std::unique_ptr<Operator> input, std::vector<Entry> order, std::optional<uint64_t> limit, std::optional<uint64_t> offset);
 
    // Traverse Operator
-   void traverse(OperatorVisitor& visitor) override;
-   void traverse(ConstOperatorVisitor& visitor) const override;
+   void traverse(OperatorVisitor& out) override;
+   void traverse(ConstOperatorVisitor& out) const override;
 };
 //---------------------------------------------------------------------------
 /// A window operator
@@ -228,8 +228,8 @@ struct Window : public Operator, public AggregationLike {
    Window(std::unique_ptr<Operator> input, std::vector<Aggregation> aggregates, std::vector<std::unique_ptr<Expression>> partitionBy, std::vector<Sort::Entry> orderBy);
 
    // Traverse Operator
-   void traverse(OperatorVisitor& visitor) override;
-   void traverse(ConstOperatorVisitor& visitor) const override;
+   void traverse(OperatorVisitor& out) override;
+   void traverse(ConstOperatorVisitor& out) const override;
 };
 //---------------------------------------------------------------------------
 /// An inline table definition
@@ -247,8 +247,8 @@ struct InlineTable : public Operator {
    InlineTable(std::vector<std::unique_ptr<algebra::IU>> columns, std::vector<std::unique_ptr<algebra::Expression>> values, unsigned rowCount);
 
    // Traverse Operator
-   void traverse(OperatorVisitor& visitor) override;
-   void traverse(ConstOperatorVisitor& visitor) const override;
+   void traverse(OperatorVisitor& out) override;
+   void traverse(ConstOperatorVisitor& out) const override;
 };
 //---------------------------------------------------------------------------
 }

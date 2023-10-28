@@ -17,8 +17,8 @@ namespace algebra {
 //---------------------------------------------------------------------------
 class IU;
 class Operator;
-class ExpressionVisitor;
-class ConstExpressionVisitor;
+struct ExpressionVisitor;
+struct ConstExpressionVisitor;
 //---------------------------------------------------------------------------
 /// Base struct for expressions
 struct Expression {

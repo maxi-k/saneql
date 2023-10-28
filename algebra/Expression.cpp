@@ -1,6 +1,6 @@
+#include "algebra/ExpressionTree.hpp"
 #include "algebra/Expression.hpp"
 #include "algebra/Operator.hpp"
-#include "algebra/ExpressionTree.hpp"
 #include <algorithm>
 #include <utility>
 //---------------------------------------------------------------------------

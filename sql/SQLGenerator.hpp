@@ -10,6 +10,7 @@ struct SQLWriter;
 struct SQLGenerator final : algebra::ConstExpressionVisitor, algebra::ConstOperatorVisitor {
    SQLWriter& out;
    SQLGenerator(SQLWriter& out) : out(out) {}
+   ~SQLGenerator() override = default;
 
    /// Operators
    void visit(const algebra::TableScan& op) override;

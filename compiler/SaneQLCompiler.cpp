@@ -6,6 +6,7 @@
 #include "parser/SaneQLParser.hpp"
 #include "semana/SemanticAnalysis.hpp"
 #include "sql/SQLWriter.hpp"
+#include "sql/SQLGenerator.hpp"
 #include <iostream>
 //---------------------------------------------------------------------------
 using namespace std;
@@ -24,10 +25,11 @@ std::string saneql::SaneQLCompiler::compile(const std::string& sqlQuery) {
 //---------------------------------------------------------------------------
 std::string saneql::SaneQLCompiler::compile(const ast::AST* tree) {
    SemanticAnalysis semana(schema);
+   SQLGenerator gen(sql);
    auto res = semana.analyzeQuery(tree);
    if (res.isScalar()) {
       sql.write("select ");
-      res.scalar()->generate(sql);
+      res.scalar()->traverse(gen);
    } else {
       algebra::Sort* sort = nullptr;
       auto tree = res.table().get();
@@ -47,7 +49,7 @@ std::string saneql::SaneQLCompiler::compile(const ast::AST* tree) {
          sql.writeIdentifier(c.name);
       }
       sql.write(" from ");
-      tree->generate(sql);
+      tree->traverse(gen);
       sql.write(" s");
       if (sort) {
          if (!sort->order.empty()) {
@@ -58,7 +60,7 @@ std::string saneql::SaneQLCompiler::compile(const ast::AST* tree) {
                   first = false;
                else
                   sql.write(", ");
-               o.value->generate(sql);
+               o.value->traverse(gen);
                if (o.collate != Collate{}) sql.write(" collate TODO"); // TODO
                if (o.descending) sql.write(" desc");
             }

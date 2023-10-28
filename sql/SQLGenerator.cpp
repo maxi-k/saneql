@@ -11,7 +11,7 @@ namespace saneql {
 //---------------------------------------------------------------------------
 // Operators 
 //---------------------------------------------------------------------------
-void SQLGenerator::visit(const const TableScan& op) {
+void SQLGenerator::visit(const TableScan& op) {
    out.write("(select ");
    bool first = true;
    for (auto& c : op.columns) {
@@ -28,7 +28,7 @@ void SQLGenerator::visit(const const TableScan& op) {
    out.write(")");
 };
 //---------------------------------------------------------------------------
-void SQLGenerator::visit(const const Select& op) {
+void SQLGenerator::visit(const Select& op) {
    out.write("(select * from ");
    op.input->traverse(*this);
    out.write(" s where ");
@@ -36,7 +36,7 @@ void SQLGenerator::visit(const const Select& op) {
    out.write(")");
 };
 //---------------------------------------------------------------------------
-void SQLGenerator::visit(const const Map& op) {
+void SQLGenerator::visit(const Map& op) {
    out.write("(select *");
    for (auto& c : op.computations) {
       out.write(", ");
@@ -49,7 +49,7 @@ void SQLGenerator::visit(const const Map& op) {
    out.write(" s)");
 };
 //---------------------------------------------------------------------------
-void SQLGenerator::visit(const const SetOperation& op) {
+void SQLGenerator::visit(const SetOperation& op) {
    using enum SetOperation::Op;
    auto dumpColumns = [this](const vector<unique_ptr<Expression>>& columns) {
       if (columns.empty()) {
@@ -98,7 +98,7 @@ void SQLGenerator::visit(const const SetOperation& op) {
    out.write(")");
 };
 //---------------------------------------------------------------------------
-void SQLGenerator::visit(const const Join& op) {
+void SQLGenerator::visit(const Join& op) {
    using enum Join::JoinType;
    switch (op.joinType) {
       case Inner:
@@ -176,7 +176,7 @@ void SQLGenerator::visit(const const Join& op) {
    }
 };
 //---------------------------------------------------------------------------
-void SQLGenerator::visit(const const GroupBy& op) {
+void SQLGenerator::visit(const GroupBy& op) {
    using enum GroupBy::Op;
    out.write("(select ");
    bool first = true;
@@ -226,7 +226,7 @@ void SQLGenerator::visit(const const GroupBy& op) {
    out.write(")");
 };
 //---------------------------------------------------------------------------
-void SQLGenerator::visit(const const Sort& op) {
+void SQLGenerator::visit(const Sort& op) {
    out.write("(select * from ");
    op.input->traverse(*this);
    out.write(" s");
@@ -254,7 +254,7 @@ void SQLGenerator::visit(const const Sort& op) {
    out.write(")");
 };
 //---------------------------------------------------------------------------
-void SQLGenerator::visit(const const Window& op) {
+void SQLGenerator::visit(const Window& op) {
    using WindowOp = Window::WindowOp;
    using Op = Window::Op;
    auto aggr = [this](const char* name, const Window::Aggregation& a, bool distinct = false) {
@@ -313,7 +313,7 @@ void SQLGenerator::visit(const const Window& op) {
    out.write(" s)");
 };
 //---------------------------------------------------------------------------
-void SQLGenerator::visit(const const InlineTable& op) {
+void SQLGenerator::visit(const InlineTable& op) {
    out.write("(select * from (values");
    if (op.rowCount) {
       for (unsigned index = 0; index != op.rowCount; ++index) {
@@ -359,11 +359,11 @@ void SQLGenerator::visit(const const InlineTable& op) {
 //---------------------------------------------------------------------------
 // Expressions 
 //---------------------------------------------------------------------------
-void SQLGenerator::visit(const const IURef& expr) {
+void SQLGenerator::visit(const IURef& expr) {
    out.writeIU(expr.iu);
 }
 //---------------------------------------------------------------------------
-void SQLGenerator::visit(const const ConstExpression& expr) {
+void SQLGenerator::visit(const ConstExpression& expr) {
    if (expr.null) {
       out.write("NULL");
    } else {
@@ -380,7 +380,7 @@ void SQLGenerator::visit(const const ConstExpression& expr) {
    }
 }
 //---------------------------------------------------------------------------
-void SQLGenerator::visit(const const CastExpression& expr) {
+void SQLGenerator::visit(const CastExpression& expr) {
    out.write("cast(");
    expr.input->traverse(*this);
    out.write(" as ");
@@ -388,7 +388,7 @@ void SQLGenerator::visit(const const CastExpression& expr) {
    out.write(")");
 }
 //---------------------------------------------------------------------------
-void SQLGenerator::visit(const const ComparisonExpression& expr) {
+void SQLGenerator::visit(const ComparisonExpression& expr) {
    using enum ComparisonExpression::Mode;
    generateOperand(*expr.left);
    switch (expr.mode) {
@@ -405,7 +405,7 @@ void SQLGenerator::visit(const const ComparisonExpression& expr) {
    generateOperand(*expr.right);
 }
 //---------------------------------------------------------------------------
-void SQLGenerator::visit(const const BetweenExpression& expr){
+void SQLGenerator::visit(const BetweenExpression& expr){
    generateOperand(*expr.base);
    out.write(" between ");
    generateOperand(*expr.lower);
@@ -413,7 +413,7 @@ void SQLGenerator::visit(const const BetweenExpression& expr){
    generateOperand(*expr.upper);
 };
 //---------------------------------------------------------------------------
-void SQLGenerator::visit(const const InExpression& expr) {
+void SQLGenerator::visit(const InExpression& expr) {
    generateOperand(*expr.probe);
    out.write(" in (");
    bool first = true;
@@ -427,7 +427,7 @@ void SQLGenerator::visit(const const InExpression& expr) {
    out.write(")");
 };
 //---------------------------------------------------------------------------
-void SQLGenerator::visit(const const BinaryExpression& expr) {
+void SQLGenerator::visit(const BinaryExpression& expr) {
    using enum BinaryExpression::Operation;
    generateOperand(*expr.left);
    switch (expr.op) {
@@ -444,7 +444,7 @@ void SQLGenerator::visit(const const BinaryExpression& expr) {
    generateOperand(*expr.right);
 };
 //---------------------------------------------------------------------------
-void SQLGenerator::visit(const const UnaryExpression& expr) {
+void SQLGenerator::visit(const UnaryExpression& expr) {
    using enum UnaryExpression::Operation;
    switch (expr.op) {
       case Plus: out.write("+"); break;
@@ -454,7 +454,7 @@ void SQLGenerator::visit(const const UnaryExpression& expr) {
    generateOperand(*expr.input);
 };
 //---------------------------------------------------------------------------
-void SQLGenerator::visit(const const ExtractExpression& expr){
+void SQLGenerator::visit(const ExtractExpression& expr){
    using enum ExtractExpression::Part;
    out.write("extract(");
    switch (expr.part) {
@@ -467,7 +467,7 @@ void SQLGenerator::visit(const const ExtractExpression& expr){
    out.write(")");
 };
 //---------------------------------------------------------------------------
-void SQLGenerator::visit(const const SubstrExpression& expr){
+void SQLGenerator::visit(const SubstrExpression& expr){
    out.write("substring(");
    expr.value->traverse(*this);
    if (expr.from) {
@@ -481,7 +481,7 @@ void SQLGenerator::visit(const const SubstrExpression& expr){
    out.write(")");
 };
 //---------------------------------------------------------------------------
-void SQLGenerator::visit(const const SimpleCaseExpression& expr) {
+void SQLGenerator::visit(const SimpleCaseExpression& expr) {
    out.write("case ");
    generateOperand(*expr.value);
    for (auto& c : expr.cases) {
@@ -495,7 +495,7 @@ void SQLGenerator::visit(const const SimpleCaseExpression& expr) {
    out.write(" end");
 };
 //---------------------------------------------------------------------------
-void SQLGenerator::visit(const const SearchedCaseExpression& expr){
+void SQLGenerator::visit(const SearchedCaseExpression& expr){
    out.write("case");
    for (auto& c : expr.cases) {
       out.write(" when ");
@@ -508,7 +508,7 @@ void SQLGenerator::visit(const const SearchedCaseExpression& expr){
    out.write(" end");
 };
 //---------------------------------------------------------------------------
-void SQLGenerator::visit(const const Aggregate& expr) {
+void SQLGenerator::visit(const Aggregate& expr) {
    using enum Aggregate::Op;
    out.write("(select ");
    expr.computation->traverse(*this);
@@ -546,7 +546,7 @@ void SQLGenerator::visit(const const Aggregate& expr) {
    out.write(")");
 };
 //---------------------------------------------------------------------------
-void SQLGenerator::visit(const const ForeignCall& expr) {
+void SQLGenerator::visit(const ForeignCall& expr) {
    using enum ForeignCall::CallType;
    switch (expr.callType) {
       case Function: {
