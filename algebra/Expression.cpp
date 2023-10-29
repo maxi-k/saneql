@@ -30,6 +30,12 @@ ComparisonExpression::ComparisonExpression(unique_ptr<Expression> left, unique_p
 {
 }
 //---------------------------------------------------------------------------
+void ConstExpression::traverse(ExpressionVisitor& visitor) { visitor.visit(*this); }
+void ConstExpression::traverse(ConstExpressionVisitor& visitor) const { visitor.visit(*this); }
+//---------------------------------------------------------------------------
+void CastExpression::traverse(ExpressionVisitor& visitor) { visitor.visit(*this); }
+void CastExpression::traverse(ConstExpressionVisitor& visitor) const { visitor.visit(*this); }
+//---------------------------------------------------------------------------
 void ComparisonExpression::traverse(ExpressionVisitor& visitor) { visitor.visit(*this); }
 void ComparisonExpression::traverse(ConstExpressionVisitor& visitor) const { visitor.visit(*this); }
 //---------------------------------------------------------------------------
