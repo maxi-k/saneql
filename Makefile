@@ -45,6 +45,14 @@ $(PREFIX)%.o: $(PREFIX)%.cpp
 	$(checkdir)
 	$(compilecpp)
 
+$(PREFIX)saneql.so: $(obj)
+	$(checkdir)
+	$(CXX) $(CXXFLAGS) -shared -o $@ $^
+
+$(PREFIX)saneql.a: $(obj)
+	$(checkdir)
+	ar rcs $@ $^
+
 $(PREFIX)saneql: $(obj)
 	$(CXX) $(CXXFLAGS) -o$@ $^
 
