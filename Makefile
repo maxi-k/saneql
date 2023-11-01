@@ -2,7 +2,7 @@ PREFIX:=bin/
 
 all: $(PREFIX)saneql
 
-src:=parser/ASTBase.cpp parser/SaneQLLexer.cpp infra/Schema.cpp semana/Functions.cpp semana/SemanticAnalysis.cpp algebra/Expression.cpp algebra/Operator.cpp sql/SQLWriter.cpp sql/SQLGenerator.cpp compiler/SaneQLCompiler.cpp main.cpp
+src:=parser/ASTBase.cpp parser/SaneQLLexer.cpp infra/Schema.cpp semana/Functions.cpp semana/SemanticAnalysis.cpp algebra/Expression.cpp algebra/Operator.cpp sql/SQLWriter.cpp sql/SQLGenerator.cpp compiler/SaneQLCompiler.cpp
 gensrc:=$(PREFIX)parser/saneql_parser.cpp
 obj:=$(addprefix $(PREFIX),$(src:.cpp=.o)) $(gensrc:.cpp=.o)
 
@@ -53,11 +53,14 @@ $(PREFIX)saneql.a: $(obj)
 	$(checkdir)
 	ar rcs $@ $^
 
-$(PREFIX)saneql: $(obj)
+$(PREFIX)saneql: $(obj) $(PREFIX)/main.o
 	$(CXX) $(CXXFLAGS) -o$@ $^
 
 $(PREFIX)astgen: $(PREFIX)makeutil/astgen.o
 	$(CXX) $(CXXFLAGS) -o$@ $^
 
+clean:
+	rm -rf $(PREFIX)
+.PHONY: clean
 
 include integrations/Makefile
