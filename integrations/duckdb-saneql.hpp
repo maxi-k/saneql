@@ -41,6 +41,10 @@ struct SaneQLOperatorExtension : public OperatorExtension {
       throw std::runtime_error("saneql operator deserialization not implemented");
    };
 
+	unique_ptr<LogicalExtensionOperator> FormatDeserialize(FormatDeserializer &deserializer) {
+      throw std::runtime_error("saneql operator deserialization not implemented");
+   }
+
    private:
    static BoundStatement saneql_bind(ClientContext& context, Binder& binder, OperatorExtensionInfo* info, SQLStatement& statement);
 };

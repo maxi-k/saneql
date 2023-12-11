@@ -8,6 +8,10 @@ obj:=$(addprefix $(PREFIX),$(src:.cpp=.o)) $(gensrc:.cpp=.o)
 
 CXXFLAGS:=-std=c++23 -I$(PREFIX) -I. -g -Wall -Wextra -fPIC
 
+ifdef DUCKDB_PATH
+CXXFLAGS:=$(CXXFLAGS) -isystem${DUCKDB_PATH}/src/include -L${DUCKDB_PATH}/build/release/src
+endif
+
 -include $(addprefix $(PREFIX),$(src:.cpp=.d)) $(gensrc:.cpp=.d)
 
 checkdir=@mkdir -p $(dir $@)

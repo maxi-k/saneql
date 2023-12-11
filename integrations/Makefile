@@ -11,7 +11,7 @@ so_so:=$(addprefix $(PREFIX),$(so_src:.cpp=.so))
 #$(CXX) $(CXXFLAGS) -c $< -o $@/
 $(INTEGRATIONS_PREFIX)%.o: %.cpp
 	$(checkdir)
-	$(compilecpp) -fpic
+	$(compilecpp)
 
 $(INTEGRATIONS_PREFIX)%.so: $(INTEGRATIONS_PREFIX)%.o $(obj)
 	$(checkdir)
