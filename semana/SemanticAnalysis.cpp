@@ -953,6 +953,7 @@ saneql::Type SemanticAnalysis::parseSimpleTypeName(const string& name) {
    if (name == "date") return Type::getDate();
    if (name == "interval") return Type::getInterval();
    if (name == "text") return Type::getText();
+   if (name == "numeric" || name == "decimal") return Type::getDecimal(14, 4);
    // XXX todo more types
    reportError("unknown type '" + name + "'");
 }

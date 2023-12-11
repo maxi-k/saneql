@@ -2,6 +2,7 @@
 //---------------------------------------------------------------------------
 #include "duckdb-saneql.hpp"
 //---------------------------------------------------------------------------
+// duckdb
 #include <duckdb.hpp>
 #include <duckdb/common/exception.hpp>
 #include <duckdb/common/string_util.hpp>
@@ -31,6 +32,8 @@ static std::ofstream& log() {
 }
 //---------------------------------------------------------------------------
 namespace duckdb {
+using std::is_enum_v;
+
 //---------------------------------------------------------------------------
 /// main entrypoint
 void load_saneql(DatabaseInstance& db) {
@@ -111,7 +114,7 @@ class DuckDBSchema final : public saneql::Schema {
          return &existing->second;
       }
       // TODO probably non exhaustive
-      if (auto found = Catalog::GetEntry(ctx, CatalogType::TABLE_ENTRY, INVALID_CATALOG, INVALID_SCHEMA, name, true)) {
+      if (auto found = get_table(ctx, name)) {
          Table result;
          if (auto table = dynamic_cast<TableCatalogEntry*>(found)) {
             auto& it = table->GetColumns();
@@ -121,7 +124,7 @@ class DuckDBSchema final : public saneql::Schema {
             }
          } else if (auto view = dynamic_cast<ViewCatalogEntry*>(found)) {
             result.columns.reserve(view->aliases.size());
-            for (auto i = 0; i != view->aliases.size(); ++i) {
+            for (auto i = 0u; i != view->aliases.size(); ++i) {
                result.columns.emplace_back(StringUtil::Lower(view->aliases[i]), duckToSaneType(view->types[i]));
             }
          } else {
@@ -134,6 +137,18 @@ class DuckDBSchema final : public saneql::Schema {
    }
 
    private:
+
+   static CatalogEntry* get_table(ClientContext& ctx, const std::string& name) {
+      // interface after duckdb 0.8.0
+#if __has_include(<duckdb/common/enums/on_entry_not_found.hpp>) || __has_include("duckdb/common/enums/on_entry_not_found.hpp")
+      auto on_not_found = OnEntryNotFound::RETURN_NULL;
+      auto opt_ptr = Catalog::GetEntry(ctx, CatalogType::TABLE_ENTRY, INVALID_CATALOG, INVALID_SCHEMA, name, on_not_found);
+      return opt_ptr ? opt_ptr.get() : nullptr;
+#else
+      auto on_not_found = true; // return null
+      return Catalog::GetEntry(ctx, CatalogType::TABLE_ENTRY, INVALID_CATALOG, INVALID_SCHEMA, name, on_not_found);
+#endif
+   }
 
    static Type duckToSaneType(LogicalType type) {
       using enum LogicalTypeId;
@@ -194,7 +209,7 @@ BoundStatement SaneQLOperatorExtension::saneql_bind(ClientContext& client, Binde
    SaneQLCompiler compiler(schema, writer);
    auto sql_string = compiler.compile(&parse_data->ast->get());
 
-   std::vector<std::unique_ptr<SQLStatement>> statements;
+   vector<unique_ptr<SQLStatement>> statements;
    try {
       Parser parser(client.GetParserOptions());
       parser.ParseQuery(sql_string);

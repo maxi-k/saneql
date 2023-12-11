@@ -36,13 +36,13 @@ struct SaneQLOperatorExtension : public OperatorExtension {
    SaneQLOperatorExtension() : OperatorExtension() { Bind = saneql_bind; }
    ~SaneQLOperatorExtension() = default;
 
-   private:
-   static BoundStatement saneql_bind(ClientContext& context, Binder& binder, OperatorExtensionInfo* info, SQLStatement& statement);
-
    std::string GetName() override { return SaneQLExtension::name(); }
-   std::unique_ptr<LogicalExtensionOperator> Deserialize(LogicalDeserializationState&, FieldReader&) override {
+   unique_ptr<LogicalExtensionOperator> Deserialize(LogicalDeserializationState&, FieldReader&) override {
       throw std::runtime_error("saneql operator deserialization not implemented");
    };
+
+   private:
+   static BoundStatement saneql_bind(ClientContext& context, Binder& binder, OperatorExtensionInfo* info, SQLStatement& statement);
 };
 //---------------------------------------------------------------------------
 } // namespace duckdb
