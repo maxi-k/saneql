@@ -53,7 +53,7 @@ $(PREFIX)saneql.a: $(obj)
 	$(checkdir)
 	ar rcs $@ $^
 
-$(PREFIX)saneql: $(obj) $(PREFIX)/main.o
+$(PREFIX)saneql: $(obj) $(PREFIX)main.o
 	$(CXX) $(CXXFLAGS) -o$@ $^
 
 $(PREFIX)astgen: $(PREFIX)makeutil/astgen.o
