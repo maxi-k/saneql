@@ -222,14 +222,14 @@ static vector<Rule> readRules(const char* name) {
       while (true) {
          token = lexer.next(v);
          if (token == GrammarLexer::Pipe) {
-            rule.cases.push_back(move(current));
+            rule.cases.push_back(std::move(current));
             current = RuleCase();
             continue;
          }
          if (token == GrammarLexer::Semicolon)
             break;
          if (token == GrammarLexer::Symbol) {
-            current.symbols.push_back(move(v));
+            current.symbols.push_back(std::move(v));
             continue;
          }
          if (token == GrammarLexer::LCurly) {
@@ -251,7 +251,7 @@ static vector<Rule> readRules(const char* name) {
             if (token == GrammarLexer::Semicolon)
                break;
             if (token == GrammarLexer::Pipe) {
-               rule.cases.push_back(move(current));
+               rule.cases.push_back(std::move(current));
                current = RuleCase();
                continue;
             }
@@ -261,8 +261,8 @@ static vector<Rule> readRules(const char* name) {
          cerr << "malformed rule " << rule.name << endl;
          exit(1);
       }
-      rule.cases.push_back(move(current));
-      result.push_back(move(rule));
+      rule.cases.push_back(std::move(current));
+      result.push_back(std::move(rule));
    }
    return result;
 }
@@ -544,7 +544,7 @@ static void writeExpandedGrammar(const char* astFile, const char* grammarFile, c
          if (token == GrammarLexer::Semicolon)
             break;
          if (token == GrammarLexer::Symbol) {
-            current.push_back(move(v));
+            current.push_back(std::move(v));
             continue;
          }
          if (token == GrammarLexer::LCurly) {

@@ -61,11 +61,19 @@ target_include_directories(saneql PRIVATE ${CMAKE_CURRENT_BINARY_DIR} ${CMAKE_CU
 
 # Shared Library
 add_library(saneql_shared SHARED ${SOURCES} ${GEN_SOURCES})
-target_include_directories(saneql_shared PUBLIC ${CMAKE_CURRENT_BINARY_DIR} ${CMAKE_CURRENT_SOURCE_DIR})
+target_include_directories(saneql_shared PUBLIC
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}>
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
+    $<INSTALL_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}>
+    $<INSTALL_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
+)
 
 # Static Library
 add_library(saneql_static STATIC ${SOURCES} ${GEN_SOURCES})
-target_include_directories(saneql_static PUBLIC ${CMAKE_CURRENT_BINARY_DIR} ${CMAKE_CURRENT_SOURCE_DIR})
+target_include_directories(saneql_static PUBLIC
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}>
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
+)
 
 # ASTGen executable
 add_executable(astgen makeutil/astgen.cpp)
