@@ -262,6 +262,10 @@ void SQLGenerator::visit(const Window& op) {
       out.write("(");
       if (distinct) out.write("distinct ");
       a.value->traverse(*this);
+      for (auto& p : a.parameters) {
+         out.write(", ");
+         p->traverse(*this);
+      }
       out.write(")");
    };
    out.write("(select *");
@@ -278,6 +282,13 @@ void SQLGenerator::visit(const Window& op) {
          case Op::Min: aggr("min", a); break;
          case Op::Max: aggr("max", a); break;
          case Op::RowNumber: out.write("row_number()"); break;
+         case Op::Rank: aggr("rank", a); break;
+         case Op::DenseRank: aggr("dense_rank", a); break;
+         case Op::NTile: aggr("ntile", a); break;
+         case Op::Lead: aggr("lead", a); break;
+         case Op::Lag: aggr("lag", a); break;
+         case Op::FirstValue: aggr("first_value", a); break;
+         case Op::LastValue: aggr("last_value", a); break;
       }
       out.write(" over (");
       if (!op.partitionBy.empty()) {
